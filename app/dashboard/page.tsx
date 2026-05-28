@@ -54,42 +54,50 @@ export default function DashboardPage() {
       setUser(user);
 
       if (user) {
-        // Fetch user's formulations
-        const { data: formulationsData } = await supabase
-          .from("formulations")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(5);
+        // Fetch user's formulations (with error handling for missing table)
+        try {
+          const { data: formulationsData, error } = await supabase
+            .from("formulations")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(5);
 
-        if (formulationsData) {
-          setFormulations(formulationsData);
-          
-          // Calculate stats
-          const inProgress = formulationsData.filter(f => f.status === "in_progress" || f.status === "draft").length;
-          const reviews = formulationsData.filter(f => f.status === "review").length;
-          const compliant = formulationsData.filter(f => f.status === "compliant").length;
-          
-          setStats({
-            formulations: formulationsData.length,
-            inProgress,
-            reviews,
-            compliant
-          });
+          if (!error && formulationsData) {
+            setFormulations(formulationsData);
+            
+            // Calculate stats
+            const inProgress = formulationsData.filter(f => f.status === "in_progress" || f.status === "draft").length;
+            const reviews = formulationsData.filter(f => f.status === "review").length;
+            const compliant = formulationsData.filter(f => f.status === "compliant").length;
+            
+            setStats({
+              formulations: formulationsData.length,
+              inProgress,
+              reviews,
+              compliant
+            });
+          }
+        } catch (err) {
+          console.log("Formulations table not ready yet:", err);
         }
 
         // Fetch recent activity from profiles updates
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("updated_at")
-          .eq("id", user.id)
-          .single();
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("updated_at")
+            .eq("id", user.id)
+            .single();
 
-        if (profile) {
-          setRecentActivity([
-            { type: "welcome", message: "Welcome to NutraCloud!", time: new Date().toISOString() },
-            { type: "profile", message: "Profile created", time: profile.updated_at }
-          ]);
+          if (profile) {
+            setRecentActivity([
+              { type: "welcome", message: "Welcome to NutraCloud!", time: new Date().toISOString() },
+              { type: "profile", message: "Profile created", time: profile.updated_at }
+            ]);
+          }
+        } catch (err) {
+          console.log("Profile fetch error:", err);
         }
       }
       
