@@ -25,20 +25,28 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data.session) {
-      // Create profile if doesn't exist
+      const user = data.user;
+      
+      // Check if profile exists
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", data.user.id)
+        .eq("id", user.id)
         .single();
 
       if (!profile) {
+        // Get avatar from provider metadata (Google, GitHub, etc.)
+        const avatarUrl = user.user_metadata?.avatar_url || null;
+        const fullName = user.user_metadata?.full_name || user.user_metadata?.name || "";
+        const company = user.user_metadata?.company || "";
+
+        // Create profile with avatar
         await supabase.from("profiles").insert({
-          id: data.user.id,
-          email: data.user.email,
-          full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || "",
-          company: data.user.user_metadata?.company || "",
-          avatar_url: data.user.user_metadata?.avatar_url || null,
+          id: user.id,
+          email: user.email,
+          full_name: fullName,
+          company: company,
+          avatar_url: avatarUrl,
         });
       }
     }

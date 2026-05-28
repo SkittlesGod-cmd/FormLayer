@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, User, Mail, Building, Globe, Check } from "lucide-react";
+import { Loader2, User, Mail, Building, Globe, Check, Camera } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ interface Profile {
   full_name: string | null;
   company: string | null;
   website: string | null;
+  avatar_url: string | null;
   plan: string;
   created_at: string;
 }
@@ -34,6 +35,8 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>("");
 
   const {
     register,
@@ -57,6 +60,11 @@ export default function ProfilePage() {
         return;
       }
 
+      // Get avatar from user metadata (Google, GitHub, etc.)
+      const userAvatarUrl = user.user_metadata?.avatar_url || null;
+      setAvatarUrl(userAvatarUrl);
+      setUserName(user.user_metadata?.full_name || user.user_metadata?.name || "");
+
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
@@ -65,15 +73,20 @@ export default function ProfilePage() {
 
       if (profileData) {
         setProfile(profileData as Profile);
+        // Use avatar from profile or fall back to user metadata
+        if (profileData.avatar_url) {
+          setAvatarUrl(profileData.avatar_url);
+        }
+        setUserName(profileData.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "");
         reset({
-          full_name: profileData.full_name || "",
-          company: profileData.company || "",
+          full_name: profileData.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "",
+          company: profileData.company || user.user_metadata?.company || "",
           website: profileData.website || "",
         });
       } else {
         // Profile doesn't exist yet - use user data from auth
         reset({
-          full_name: user.user_metadata?.full_name || "",
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || "",
           company: user.user_metadata?.company || "",
           website: "",
         });
@@ -103,9 +116,19 @@ export default function ProfilePage() {
           full_name: data.full_name,
           company: data.company,
           website: data.website || null,
+          avatar_url: avatarUrl,
+          updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
+
+      // Also update the user metadata
+      await supabase.auth.updateUser({
+        data: {
+          full_name: data.full_name,
+          company: data.company,
+        },
+      });
 
       toast.success("Profile updated successfully!");
       reset(data);
@@ -148,25 +171,36 @@ export default function ProfilePage() {
 
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <form onSubmit={handleSubmit(onSubmit)} className="p-8">
-            {/* Plan badge */}
-            {profile?.plan && (
-              <div className="mb-8 flex items-center gap-4 rounded-xl bg-gray-50 p-4">
-                <div className="flex size-10 items-center justify-center rounded-full bg-brand-50">
-                  <User className="size-5 text-brand" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {profile.full_name || "Your Account"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Member since{" "}
-                    {profile.created_at &&
-                      new Date(profile.created_at).toLocaleDateString("en-US", {
-                        month: "long",
-                        year: "numeric",
-                      })}
-                  </p>
-                </div>
+            {/* Avatar and plan badge */}
+            <div className="mb-8 flex items-center gap-4 rounded-xl bg-gray-50 p-4">
+              {/* Avatar */}
+              <div className="relative">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Profile"
+                    className="size-14 rounded-full object-cover ring-2 ring-white"
+                  />
+                ) : (
+                  <div className="flex size-14 items-center justify-center rounded-full bg-brand text-white text-xl font-semibold ring-2 ring-white">
+                    {userName?.[0]?.toUpperCase() || "U"}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  {userName || "Your Account"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Member since{" "}
+                  {profile?.created_at &&
+                    new Date(profile.created_at).toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                </p>
+              </div>
+              {profile?.plan && (
                 <span
                   className={cn(
                     "rounded-full px-3 py-1 text-xs font-medium",
@@ -175,8 +209,8 @@ export default function ProfilePage() {
                 >
                   {getPlanDisplay(profile.plan).label}
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="space-y-6">
               <div className="flex flex-col gap-1.5">
