@@ -60,8 +60,8 @@ export default function ProfilePage() {
         return;
       }
 
-      // Get avatar from user metadata (Google, GitHub, etc.)
-      const userAvatarUrl = user.user_metadata?.avatar_url || null;
+      // Get avatar from user metadata (Google uses 'picture', GitHub uses 'avatar_url')
+      const userAvatarUrl = user.user_metadata?.picture || user.user_metadata?.avatar_url || null;
       setAvatarUrl(userAvatarUrl);
       setUserName(user.user_metadata?.full_name || user.user_metadata?.name || "");
 
@@ -73,9 +73,13 @@ export default function ProfilePage() {
 
       if (profileData) {
         setProfile(profileData as Profile);
-        // Use avatar from profile or fall back to user metadata
+        // Use avatar from profile or fall back to user metadata (Google uses 'picture')
         if (profileData.avatar_url) {
           setAvatarUrl(profileData.avatar_url);
+        } else if (user.user_metadata?.picture) {
+          setAvatarUrl(user.user_metadata.picture);
+        } else if (user.user_metadata?.avatar_url) {
+          setAvatarUrl(user.user_metadata.avatar_url);
         }
         setUserName(profileData.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "");
         reset({

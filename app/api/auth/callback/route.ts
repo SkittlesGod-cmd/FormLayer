@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (!profile) {
-        // Get avatar from provider metadata (Google, GitHub, etc.)
-        const avatarUrl = user.user_metadata?.avatar_url || null;
+        // Get avatar from provider metadata (Google uses 'picture', GitHub uses 'avatar_url')
+        const avatarUrl = user.user_metadata?.picture || user.user_metadata?.avatar_url || null;
         const fullName = user.user_metadata?.full_name || user.user_metadata?.name || "";
         const company = user.user_metadata?.company || "";
 
@@ -48,6 +48,14 @@ export async function GET(request: NextRequest) {
           company: company,
           avatar_url: avatarUrl,
         });
+      } else if (user.user_metadata?.picture || user.user_metadata?.avatar_url) {
+        // Profile exists but no avatar - update it
+        await supabase
+          .from("profiles")
+          .update({ 
+            avatar_url: user.user_metadata?.picture || user.user_metadata?.avatar_url 
+          })
+          .eq("id", user.id);
       }
     }
 
