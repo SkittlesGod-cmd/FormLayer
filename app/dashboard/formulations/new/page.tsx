@@ -114,48 +114,99 @@ function stepIndex(phase: Phase): number {
   return 4;
 }
 
+function repairJson(s: string): any | null {
+  // Try as-is first
+  try { return JSON.parse(s); } catch {}
+
+  // Close any unclosed strings, arrays, and objects caused by truncation
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\" && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+
+  // If we're mid-string, close it
+  const suffix = (inString ? '"' : "") + stack.reverse().join("");
+  if (suffix) {
+    // Also strip a trailing comma before closing
+    const trimmed = s.replace(/,\s*$/, "");
+    try { return JSON.parse(trimmed + suffix); } catch {}
+    // Try removing the last incomplete property line
+    const lastComma = trimmed.lastIndexOf(",");
+    if (lastComma > 0) {
+      try { return JSON.parse(trimmed.slice(0, lastComma) + suffix); } catch {}
+    }
+  }
+  return null;
+}
+
 function parseFormulationJson(text: string): ParsedFormulation | null {
-  function mapRaw(raw: any): ParsedFormulation {
-    return {
-      name: raw.name ?? "",
-      description: raw.description ?? "",
-      ingredients: (raw.ingredients ?? []).map((ing: any, i: number) => ({
+  function mapRaw(raw: any): ParsedFormulation | null {
+    if (!raw || typeof raw !== "object") return null;
+    const ingredients = (raw.ingredients ?? [])
+      .filter((ing: any) => ing && ing.name)
+      .map((ing: any, i: number) => ({
         id: `parsed-${i}`,
         name: ing.name ?? "",
         dose: String(ing.dose ?? ""),
         unit: ing.unit ?? "mg",
         rationale: ing.rationale ?? "",
-      })),
+      }));
+    if (!raw.name || ingredients.length === 0) return null;
+    return {
+      name: raw.name,
+      description: raw.description ?? "",
+      ingredients,
       serving_size: raw.serving_size ?? "",
       total_fill_weight_mg: raw.total_fill_weight_mg ?? 0,
       expected_outcomes: raw.expected_outcomes ?? "",
     };
   }
 
-  // Strategy 1: ```json ... ``` or ``` ... ```
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) {
-    try { return mapRaw(JSON.parse(fenceMatch[1])); } catch {}
+  function tryParse(candidate: string): ParsedFormulation | null {
+    const direct = repairJson(candidate);
+    if (direct) { const m = mapRaw(direct); if (m) return m; }
+    return null;
   }
 
-  // Strategy 2: find the first { that contains "name" and "ingredients"
+  // Strategy 1: ```json ... ``` fence
+  const fenceJson = text.match(/```json\s*([\s\S]*?)(?:```|$)/);
+  if (fenceJson) { const r = tryParse(fenceJson[1].trim()); if (r) return r; }
+
+  // Strategy 2: ``` ... ``` fence without language
+  const fencePlain = text.match(/```\s*([\s\S]*?)(?:```|$)/);
+  if (fencePlain) { const r = tryParse(fencePlain[1].trim()); if (r) return r; }
+
+  // Strategy 3: extract from first { to last } in the whole text
   const start = text.indexOf("{");
   if (start !== -1) {
-    // Walk forward to find the matching closing brace
-    let depth = 0;
-    let end = -1;
+    // Try the whole remainder first (handles truncated JSON)
+    const r = tryParse(text.slice(start));
+    if (r) return r;
+
+    // Find matching close brace
+    let depth = 0, end = -1, inStr = false, esc = false;
     for (let i = start; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}") {
-        depth--;
-        if (depth === 0) { end = i; break; }
-      }
+      const c = text[i];
+      if (esc) { esc = false; continue; }
+      if (c === "\\" && inStr) { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === "{") depth++;
+      else if (c === "}") { depth--; if (depth === 0) { end = i; break; } }
     }
     if (end !== -1) {
-      try {
-        const raw = JSON.parse(text.slice(start, end + 1));
-        if (raw.name && raw.ingredients) return mapRaw(raw);
-      } catch {}
+      const r = tryParse(text.slice(start, end + 1));
+      if (r) return r;
     }
   }
 

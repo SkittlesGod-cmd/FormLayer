@@ -22,3 +22,4 @@ export function getAIClient(): OpenAI {
 
 export const MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
 export const MAX_TOKENS = 4096;
+export const MAX_TOKENS_FORMULATE = 8192;

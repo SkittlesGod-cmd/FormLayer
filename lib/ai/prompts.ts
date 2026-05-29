@@ -152,7 +152,7 @@ Start your response with a \`\`\`json code fence containing the formulation JSON
       "name": "Full ingredient name with form (e.g. Ashwagandha KSM-66® Extract (5% withanolides))",
       "dose": "300",
       "unit": "mg",
-      "rationale": "Dose matches the Chandrasekhar 2012 RCT (n=64); KSM-66 standardization ensures withanolide consistency"
+      "rationale": "Chandrasekhar 2012 RCT dose; KSM-66 for standardized withanolides"
     }
   ],
   "serving_size": "2 capsules",
@@ -182,7 +182,10 @@ Rules:
 - You MUST wrap the JSON in a \`\`\`json code fence — the application parses it programmatically and will fail if the fence is missing.
 - NEVER output the JSON as plain text without the code fence.
 - NEVER include disease names anywhere in the JSON fields.
-- NEVER use "treats", "cures", "heals", "for [disease]" in any field.`;
+- NEVER use "treats", "cures", "heals", "for [disease]" in any field.
+- Keep each "rationale" value under 15 words — the JSON must fit within token limits.
+- Keep "expected_outcomes" under 30 words.
+- Complete the entire JSON before writing any prose explanation.`;
 
 export const BUILDER_REFINE_SYSTEM = `\
 You are refining a dietary supplement/cosmetic formulation. You make only the specific changes requested AND simultaneously apply any compliance improvements needed — because every revision is an opportunity to improve the compliance score.

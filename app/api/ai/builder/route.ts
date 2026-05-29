@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { getAIClient, MODEL, MAX_TOKENS } from "@/lib/ai/client";
+import { getAIClient, MODEL, MAX_TOKENS, MAX_TOKENS_FORMULATE } from "@/lib/ai/client";
 import {
   BUILDER_RESEARCH_SYSTEM,
   BUILDER_FORMULATE_SYSTEM,
@@ -103,9 +103,13 @@ Apply every fix identified in the compliance analysis. Output the complete revis
 
   try {
     const ai = getAIClient();
+    const tokenLimit = (phase === "formulate" || phase === "refine" || phase === "compliance_refine")
+      ? MAX_TOKENS_FORMULATE
+      : MAX_TOKENS;
+
     const stream = await ai.chat.completions.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
+      max_tokens: tokenLimit,
       stream: true,
       messages: [
         { role: "system", content: system },
