@@ -31,7 +31,9 @@ export function Navbar() {
   };
 
   const isAuthPage = pathname === "/sign-in" || pathname === "/sign-up";
-  const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard");
+  const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+
+  if (isDashboard) return null;
 
   return (
     <header className="sticky top-0 z-50 px-3 pt-3">

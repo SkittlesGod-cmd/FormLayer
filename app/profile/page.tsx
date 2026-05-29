@@ -37,6 +37,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
 
   const {
     register,
@@ -63,6 +64,7 @@ export default function ProfilePage() {
       // Get avatar from user metadata (Google uses 'picture', GitHub uses 'avatar_url')
       const userAvatarUrl = user.user_metadata?.picture || user.user_metadata?.avatar_url || null;
       setAvatarUrl(userAvatarUrl);
+      setUserEmail(user.email ?? "");
       setUserName(user.user_metadata?.full_name || user.user_metadata?.name || "");
 
       const { data: profileData } = await supabase
@@ -272,7 +274,7 @@ export default function ProfilePage() {
                   <Input
                     id="email"
                     type="email"
-                    value={profile?.full_name ? "loading..." : ""}
+                    value={userEmail}
                     disabled
                     className="pl-10 h-11 bg-gray-50 cursor-not-allowed"
                   />

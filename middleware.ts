@@ -69,6 +69,10 @@ async function middlewareHandler(request: NextRequest) {
 
   // Redirect unauthenticated users away from protected routes
   if (!user && !isPublicRoute && !AUTH_ROUTES.includes(pathname)) {
+    // API routes must return JSON, not redirect to the sign-in page
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const redirectUrl = new URL("/sign-in", request.url);
     redirectUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(redirectUrl);

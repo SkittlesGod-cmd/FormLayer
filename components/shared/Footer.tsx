@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const FOOTER_LINKS = [
   { label: "Home", href: "/" },
@@ -9,6 +12,9 @@ const FOOTER_LINKS = [
 ];
 
 export function Footer() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/dashboard")) return null;
+
   return (
     <footer className="border-t border-black/6 bg-[rgba(255,255,255,0.7)]">
       <div className="page-shell py-10 md:py-12">
