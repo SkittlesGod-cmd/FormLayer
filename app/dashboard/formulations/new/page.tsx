@@ -115,10 +115,7 @@ function stepIndex(phase: Phase): number {
 }
 
 function parseFormulationJson(text: string): ParsedFormulation | null {
-  try {
-    const match = text.match(/```json\s*([\s\S]*?)```/);
-    if (!match) return null;
-    const raw = JSON.parse(match[1]);
+  function mapRaw(raw: any): ParsedFormulation {
     return {
       name: raw.name ?? "",
       description: raw.description ?? "",
@@ -133,9 +130,36 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
       total_fill_weight_mg: raw.total_fill_weight_mg ?? 0,
       expected_outcomes: raw.expected_outcomes ?? "",
     };
-  } catch {
-    return null;
   }
+
+  // Strategy 1: ```json ... ``` or ``` ... ```
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try { return mapRaw(JSON.parse(fenceMatch[1])); } catch {}
+  }
+
+  // Strategy 2: find the first { that contains "name" and "ingredients"
+  const start = text.indexOf("{");
+  if (start !== -1) {
+    // Walk forward to find the matching closing brace
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}") {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end !== -1) {
+      try {
+        const raw = JSON.parse(text.slice(start, end + 1));
+        if (raw.name && raw.ingredients) return mapRaw(raw);
+      } catch {}
+    }
+  }
+
+  return null;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -364,6 +388,10 @@ export default function NewFormulationPage() {
     const parsed = parseFormulationJson(content);
     setParsedFormulation(parsed);
 
+    if (!parsed) {
+      toast.error("Could not parse formulation structure. You can review the AI output and regenerate.");
+    }
+
     // Create in DB
     if (parsed && intake.product_type) {
       const id = await createFormulation(parsed, intake.product_type);
@@ -401,17 +429,20 @@ export default function NewFormulationPage() {
   // ── Phase: Compliance ──
   async function runCompliance() {
     if (!formulationId) {
-      // No ID yet — create with current parsed data
       if (parsedFormulation && intake.product_type) {
         const id = await createFormulation(parsedFormulation, intake.product_type);
         if (id) {
           setFormulationId(id);
           await runComplianceForId(id);
+          return;
         }
       }
-    } else {
-      await runComplianceForId(formulationId);
+      // No parsedFormulation or DB create failed — can't run compliance
+      toast.error("Could not save formulation. Please review and try again.");
+      setPhase("formulation_review");
+      return;
     }
+    await runComplianceForId(formulationId);
   }
 
   async function runComplianceForId(id: string, attempt = 0) {

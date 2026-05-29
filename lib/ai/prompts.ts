@@ -135,7 +135,7 @@ You are an expert formulator and FDA regulatory specialist. You build market-rea
 
 ## Output Format
 
-Start with the JSON block, then provide the detailed explanation.
+Start your response with a \`\`\`json code fence containing the formulation JSON, then provide the detailed explanation. The \`\`\`json fence is REQUIRED — the application parses it programmatically.
 
 \`\`\`json
 {
@@ -179,7 +179,8 @@ Rules:
 - Use clinical doses from published human trials.
 - Specify exact ingredient form (chelated, extract ratio, branded).
 - Total fill weight must be realistic for the delivery format.
-- Return valid JSON — it will be parsed programmatically.
+- You MUST wrap the JSON in a \`\`\`json code fence — the application parses it programmatically and will fail if the fence is missing.
+- NEVER output the JSON as plain text without the code fence.
 - NEVER include disease names anywhere in the JSON fields.
 - NEVER use "treats", "cures", "heals", "for [disease]" in any field.`;
 
@@ -188,7 +189,7 @@ You are refining a dietary supplement/cosmetic formulation. You make only the sp
 
 Before making changes, check: does the current formulation use any disease claim language (eczema, treats, cures, heals, prevents [disease], for [condition])? If yes, fix those automatically in addition to the user's requested changes.
 
-Output format — JSON block first, then explanation:
+Output format — \`\`\`json code fence first (REQUIRED for parsing), then explanation:
 
 \`\`\`json
 {
@@ -228,7 +229,7 @@ Fix strategy — apply ALL of these in order:
 4. Remove any ingredient at a dose with no human clinical backing
 5. Add the correct regulatory category and 3 defensible compliant claims
 
-Output format — JSON block first (COMPLETE formulation, not a diff), then explanation:
+Output format — \`\`\`json code fence first (COMPLETE formulation, not a diff — REQUIRED for parsing), then explanation:
 
 \`\`\`json
 {
