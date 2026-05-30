@@ -12,7 +12,7 @@ export function getAIClient(): OpenAI {
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: key,
       defaultHeaders: {
-        "HTTP-Referer": "https://formlayer.app",
+        "HTTP-Referer": "https://formlayer.co",
         "X-Title": "FormLayer",
       },
     });
@@ -20,6 +20,11 @@ export function getAIClient(): OpenAI {
   return _client;
 }
 
-export const MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
-export const MAX_TOKENS = 4096;
-export const MAX_TOKENS_FORMULATE = 8192;
+// Primary model: Claude Sonnet — accurate scientific knowledge, strong structured output
+export const MODEL = "anthropic/claude-sonnet-4-5";
+
+// Fallback for compliance-only (lighter, faster)
+export const MODEL_COMPLIANCE = "anthropic/claude-haiku-4-5";
+
+export const MAX_TOKENS = 6000;
+export const MAX_TOKENS_FORMULATE = 10000;

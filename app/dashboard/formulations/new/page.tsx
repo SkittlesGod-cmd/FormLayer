@@ -53,6 +53,9 @@ interface ParsedIngredient {
   dose: string;
   unit: string;
   rationale: string;
+  evidence_grade?: "A" | "B" | "C";
+  clinical_dose_range?: string;
+  dose_assessment?: "at_studied_dose" | "below_studied_dose" | "above_studied_dose";
 }
 
 interface ParsedFormulation {
@@ -60,6 +63,7 @@ interface ParsedFormulation {
   description: string;
   ingredients: ParsedIngredient[];
   serving_size: string;
+  servings_per_day?: number;
   total_fill_weight_mg: number;
   expected_outcomes: string;
 }
@@ -160,6 +164,9 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
         dose: String(ing.dose ?? ""),
         unit: ing.unit ?? "mg",
         rationale: ing.rationale ?? "",
+        evidence_grade: ing.evidence_grade ?? undefined,
+        clinical_dose_range: ing.clinical_dose_range ?? undefined,
+        dose_assessment: ing.dose_assessment ?? undefined,
       }));
     if (!raw.name || ingredients.length === 0) return null;
     return {
@@ -827,21 +834,47 @@ export default function NewFormulationPage() {
 
                   {/* Ingredients table */}
                   <div className="rounded-lg border border-black/[0.06] overflow-hidden">
-                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-black/[0.05] bg-gray-50/80 px-4 py-2">
+                    <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-black/[0.05] bg-gray-50/80 px-4 py-2">
                       <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ingredient</span>
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Dose</span>
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Unit</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 text-right">Dose</span>
                     </div>
                     {parsedFormulation.ingredients.map((ing, i) => (
-                      <div key={i} className="grid grid-cols-[1fr_auto_auto] items-start gap-3 border-b border-black/[0.04] px-4 py-3 last:border-0">
-                        <div>
-                          <p className="text-[13px] font-medium text-gray-900">{ing.name}</p>
-                          {ing.rationale && (
-                            <p className="mt-0.5 text-[11px] leading-snug text-gray-400">{ing.rationale}</p>
-                          )}
+                      <div key={i} className="border-b border-black/[0.04] px-4 py-3 last:border-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[13px] font-medium text-gray-900">{ing.name}</p>
+                              {ing.evidence_grade && (
+                                <span className={cn(
+                                  "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                                  ing.evidence_grade === "A" ? "bg-emerald-50 text-emerald-700" :
+                                  ing.evidence_grade === "B" ? "bg-amber-50 text-amber-700" :
+                                  "bg-gray-100 text-gray-500"
+                                )}>
+                                  {ing.evidence_grade === "A" ? "Strong RCT" : ing.evidence_grade === "B" ? "Moderate" : "Emerging"}
+                                </span>
+                              )}
+                              {ing.dose_assessment && ing.dose_assessment !== "at_studied_dose" && (
+                                <span className={cn(
+                                  "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold",
+                                  ing.dose_assessment === "below_studied_dose" ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"
+                                )}>
+                                  {ing.dose_assessment === "below_studied_dose" ? "↓ Below clinical dose" : "↑ Above clinical dose"}
+                                </span>
+                              )}
+                            </div>
+                            {ing.clinical_dose_range && (
+                              <p className="mt-0.5 text-[10px] text-gray-400">Clinical range: {ing.clinical_dose_range}</p>
+                            )}
+                            {ing.rationale && (
+                              <p className="mt-1 text-[11px] leading-snug text-gray-500">{ing.rationale}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="font-mono text-[14px] font-semibold text-gray-800">{ing.dose}</p>
+                            <p className="font-mono text-[11px] text-gray-400">{ing.unit}</p>
+                          </div>
                         </div>
-                        <p className="font-mono text-[13px] font-semibold text-gray-700 pt-px">{ing.dose}</p>
-                        <p className="font-mono text-[12px] text-gray-400 pt-px">{ing.unit}</p>
                       </div>
                     ))}
                   </div>

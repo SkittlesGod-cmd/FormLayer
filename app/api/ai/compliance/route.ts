@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { getAIClient, MODEL } from "@/lib/ai/client";
+import { getAIClient, MODEL_COMPLIANCE as MODEL } from "@/lib/ai/client";
 import { COMPLIANCE_SYSTEM } from "@/lib/ai/prompts";
 import { z } from "zod";
 
