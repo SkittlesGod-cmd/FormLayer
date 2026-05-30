@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, ArrowRight, Loader2, ExternalLink, Zap, AlertCircle } from "lucide-react";
 import { initializePaddle, CheckoutEventNames, type Paddle, type PaddleEventData } from "@paddle/paddle-js";
@@ -17,6 +17,14 @@ interface BillingState {
 }
 
 export default function BillingPage() {
+  return (
+    <Suspense>
+      <BillingPageInner />
+    </Suspense>
+  );
+}
+
+function BillingPageInner() {
   const searchParams = useSearchParams();
   const upgradePlan = searchParams.get("upgrade");
   const paddleRef = useRef<Paddle | null>(null);
