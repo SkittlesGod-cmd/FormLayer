@@ -43,7 +43,9 @@ export function Footer() {
 
         <div className="mt-8 flex flex-col gap-3 border-t border-black/6 pt-6 text-sm text-gray-500 md:flex-row md:items-center md:justify-between">
           <p>© 2026 FormLayer, Inc.</p>
-          <p>Built for teams moving from formulation to launch with more confidence.</p>
+          <div className="flex items-center gap-4">
+            <Link href="/terms" className="transition-colors hover:text-gray-950">Terms of Service</Link>
+          </div>
         </div>
       </div>
     </footer>
