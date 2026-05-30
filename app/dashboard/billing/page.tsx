@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, ArrowRight, Loader2, ExternalLink, Zap, AlertCircle } from "lucide-react";
+import { initializePaddle, type Paddle } from "@paddle/paddle-js";
 import { PLANS, PLAN_ORDER, getPlan, type PlanId } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -15,41 +16,28 @@ interface BillingState {
   formulation_count: number;
 }
 
-declare global {
-  interface Window {
-    Paddle?: any;
-  }
-}
-
 export default function BillingPage() {
   const searchParams = useSearchParams();
   const upgradePlan = searchParams.get("upgrade");
-  const paddleLoaded = useRef(false);
+  const paddleRef = useRef<Paddle | null>(null);
 
   const [state, setState] = useState<BillingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
-  // Load Paddle.js
+  // Initialize Paddle.js
   useEffect(() => {
-    if (paddleLoaded.current) return;
-    paddleLoaded.current = true;
-
     const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-    const env = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT ?? "sandbox";
+    const env = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT;
     if (!clientToken) return;
 
-    const script = document.createElement("script");
-    script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.Paddle) {
-        if (env !== "production") window.Paddle.Environment.set("sandbox");
-        window.Paddle.Initialize({ token: clientToken });
-      }
-    };
-    document.head.appendChild(script);
+    initializePaddle({
+      environment: env === "production" ? "production" : "sandbox",
+      token: clientToken,
+    }).then(paddle => {
+      if (paddle) paddleRef.current = paddle;
+    });
   }, []);
 
   // Fetch subscription state
@@ -80,22 +68,21 @@ export default function BillingPage() {
   async function openCheckout(planId: string) {
     const plan = PLANS[planId as PlanId];
     if (!plan?.priceId) {
-      toast.error("Price ID not configured yet — add PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID to .env.local");
+      toast.error("Price ID not configured — add PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID to .env.local");
       return;
     }
-    if (!window.Paddle) {
+    if (!paddleRef.current) {
       toast.error("Paddle.js not loaded — add NEXT_PUBLIC_PADDLE_CLIENT_TOKEN to .env.local");
       return;
     }
 
     setCheckoutLoading(planId);
 
-    // Get user email for pre-fill
     const userRes = await fetch("/api/auth/user").catch(() => null);
     const userData = userRes ? await userRes.json().catch(() => ({})) : {};
 
-    window.Paddle.Checkout.open({
-      items: [{ priceId: plan.priceId, quantity: 1 }],
+    paddleRef.current.Checkout.open({
+      items: [{ priceId: plan.priceId!, quantity: 1 }],
       customer: userData.email ? { email: userData.email } : undefined,
       customData: userData.id ? { user_id: userData.id } : undefined,
       settings: { displayMode: "overlay", theme: "light" },

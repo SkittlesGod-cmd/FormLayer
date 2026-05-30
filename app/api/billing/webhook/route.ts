@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Webhooks, EventName } from "@paddle/paddle-node-sdk";
+import { createHmac } from "crypto";
+import { EventName } from "@paddle/paddle-node-sdk";
 import { createClient } from "@/utils/supabase/server";
 import { PADDLE_WEBHOOK_SECRET } from "@/lib/billing/paddle";
 import type { PlanId } from "@/lib/billing/plans";
+
+// Verify Paddle signature without the SDK's 5-second timestamp window
+// (Paddle reuses the original ts on retries, so the SDK always rejects retried webhooks)
+function verifySignature(rawBody: string, secret: string, signatureHeader: string): boolean {
+  const parts: Record<string, string> = {};
+  for (const part of signatureHeader.split(";")) {
+    const [k, v] = part.split("=");
+    if (k && v) parts[k] = v;
+  }
+  if (!parts.ts || !parts.h1) return false;
+  const computed = createHmac("sha256", secret).update(`${parts.ts}:${rawBody}`).digest("hex");
+  return computed === parts.h1;
+}
 
 // Map Paddle price IDs → plan IDs
 function planFromPriceId(priceId: string | undefined): PlanId {
@@ -20,15 +34,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
 
-  let event: any;
-  try {
-    event = await new Webhooks().unmarshal(rawBody, PADDLE_WEBHOOK_SECRET, signature);
-  } catch {
+  if (!verifySignature(rawBody, PADDLE_WEBHOOK_SECRET, signature)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
+  let event: any;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
   const supabase = await createClient();
-  const eventType: string = event.eventType ?? event.event_type ?? "";
+  const eventType: string = event.event_type ?? "";
 
   // Helper — upsert subscription row
   async function upsertSubscription(data: Record<string, unknown>) {
@@ -44,7 +62,7 @@ export async function POST(req: NextRequest) {
     eventType === EventName.SubscriptionTrialing
   ) {
     const sub = event.data;
-    const userId: string | undefined = sub.customData?.user_id;
+    const userId: string | undefined = sub.custom_data?.user_id;
     if (!userId) return NextResponse.json({ received: true });
 
     const priceId = sub.items?.[0]?.price?.id;
@@ -52,12 +70,12 @@ export async function POST(req: NextRequest) {
 
     await upsertSubscription({
       user_id: userId,
-      paddle_customer_id: sub.customerId,
+      paddle_customer_id: sub.customer_id,
       paddle_subscription_id: sub.id,
       plan,
       status: sub.status,
-      current_period_end: sub.currentBillingPeriod?.endsAt ?? null,
-      cancel_at_period_end: sub.scheduledChange?.action === "cancel",
+      current_period_end: sub.current_billing_period?.ends_at ?? null,
+      cancel_at_period_end: sub.scheduled_change?.action === "cancel",
       updated_at: new Date().toISOString(),
     });
   }
