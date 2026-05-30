@@ -28,7 +28,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "starter",
     name: "Starter",
     price: 49,
-    priceId: process.env.PADDLE_STARTER_PRICE_ID ?? null,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_STARTER_PRICE_ID ?? process.env.PADDLE_STARTER_PRICE_ID ?? null,
     formulationLimit: 15,
     highlighted: true,
     features: [
@@ -44,7 +44,7 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "pro",
     name: "Pro",
     price: 149,
-    priceId: process.env.PADDLE_PRO_PRICE_ID ?? null,
+    priceId: process.env.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID ?? process.env.PADDLE_PRO_PRICE_ID ?? null,
     formulationLimit: -1,
     features: [
       "Unlimited formulations",

@@ -99,13 +99,11 @@ export default function BillingPage() {
       customer: userData.email ? { email: userData.email } : undefined,
       customData: userData.id ? { user_id: userData.id } : undefined,
       settings: { displayMode: "overlay", theme: "light" },
-      events: {
-        onCompleted: () => {
-          toast.success("Subscription activated! Refreshing…");
-          setTimeout(() => window.location.reload(), 2000);
-        },
-        onClose: () => setCheckoutLoading(null),
+      onComplete: () => {
+        toast.success("Subscription activated! Refreshing…");
+        setTimeout(() => window.location.reload(), 2500);
       },
+      onClose: () => setCheckoutLoading(null),
     });
   }
 
