@@ -20,11 +20,12 @@ export function getAIClient(): OpenAI {
   return _client;
 }
 
-// Primary model: Claude Sonnet — accurate scientific knowledge, strong structured output
-export const MODEL = "anthropic/claude-sonnet-4-5";
+// Primary model: Llama 3.3 70B — best free model for scientific structured output
+// Upgrade path: switch to "anthropic/claude-sonnet-4-5" with paid OpenRouter credits
+export const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
-// Fallback for compliance-only (lighter, faster)
-export const MODEL_COMPLIANCE = "anthropic/claude-haiku-4-5";
+// Compliance model: same free model
+export const MODEL_COMPLIANCE = "meta-llama/llama-3.3-70b-instruct:free";
 
-export const MAX_TOKENS = 6000;
-export const MAX_TOKENS_FORMULATE = 10000;
+export const MAX_TOKENS = 5000;
+export const MAX_TOKENS_FORMULATE = 8000;
