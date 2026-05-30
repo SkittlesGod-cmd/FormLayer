@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 import { EventName } from "@paddle/paddle-node-sdk";
-import { createClient } from "@/utils/supabase/server";
 import { PADDLE_WEBHOOK_SECRET } from "@/lib/billing/paddle";
 import type { PlanId } from "@/lib/billing/plans";
+
+// Use service role to bypass RLS — webhook has no user session
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 // Verify Paddle signature without the SDK's 5-second timestamp window
 // (Paddle reuses the original ts on retries, so the SDK always rejects retried webhooks)
@@ -45,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = getServiceClient();
   const eventType: string = event.event_type ?? "";
 
   // Helper — upsert subscription row
@@ -63,9 +71,7 @@ export async function POST(req: NextRequest) {
   ) {
     const sub = event.data;
     const userId: string | undefined = sub.custom_data?.user_id;
-    if (!userId) {
-      return NextResponse.json({ received: true, debug: { custom_data: sub.custom_data, customer_id: sub.customer_id, items: sub.items?.[0]?.price?.id } });
-    }
+    if (!userId) return NextResponse.json({ received: true });
 
     const priceId = sub.items?.[0]?.price?.id;
     const plan = planFromPriceId(priceId);
