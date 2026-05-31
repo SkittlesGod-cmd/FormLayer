@@ -6,13 +6,15 @@ import { z } from "zod";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const nullableStr = (schema: z.ZodString) => schema.nullable().optional();
+
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).optional(),
+  description: nullableStr(z.string().max(500)),
   model: z.string().min(1).optional(),
-  persona: z.string().max(2000).optional(),
-  target_population: z.string().max(100).optional(),
-  product_type: z.string().optional(),
+  persona: nullableStr(z.string().max(2000)),
+  target_population: nullableStr(z.string().max(100)),
+  product_type: nullableStr(z.string()),
   auto_enrich: z.boolean().optional(),
 });
 
