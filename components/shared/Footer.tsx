@@ -11,6 +11,7 @@ const FOOTER_COLUMNS = [
       { label: "Pricing", href: "/pricing" },
       { label: "For agencies", href: "/for-agencies" },
       { label: "Changelog", href: "/changelog" },
+      { label: "vs. Spreadsheets", href: "/vs" },
       { label: "Dashboard", href: "/dashboard" },
     ],
   },

@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getAIClient, MODEL_COMPLIANCE as MODEL } from "@/lib/ai/client";
 import { COMPLIANCE_SYSTEM } from "@/lib/ai/prompts";
 import { z } from "zod";
+import { checkRateLimit } from "@/lib/ratelimit";
 
 const bodySchema = z.object({
   formulation_id: z.string().uuid(),
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { allowed } = await checkRateLimit(user.id);
+  if (!allowed) return NextResponse.json({ error: "Rate limit exceeded. Try again in a minute." }, { status: 429 });
 
   let body: unknown;
   try { body = await req.json(); } catch {

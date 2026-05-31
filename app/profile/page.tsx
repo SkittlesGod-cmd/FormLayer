@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, User, Mail, Building, Globe, Check, Camera } from "lucide-react";
+import { Loader2, User, Mail, Building, Globe, Check, Camera, KeyRound, Trash2, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -344,21 +344,140 @@ export default function ProfilePage() {
           </form>
         </div>
 
-        {/* Password section */}
-        <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-8">
-          <h2 className="text-lg font-semibold text-gray-900">Security</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Update your password to keep your account secure
-          </p>
-          <div className="mt-6">
-            <a
-              href="/change-password"
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-            >
-              Change password
-            </a>
-          </div>
+        {/* Password / Security section */}
+        <PasswordSection />
+
+        {/* Danger zone */}
+        <DangerZone userEmail={userEmail} />
+      </div>
+    </div>
+  );
+}
+
+function PasswordSection() {
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) setEmail(user.email);
+    });
+  }, []);
+
+  async function sendReset() {
+    if (!email) return;
+    setLoading(true);
+    const supabase = createBrowserClient();
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSent(true);
+    setLoading(false);
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-8">
+      <div className="flex items-center gap-3">
+        <KeyRound className="size-5 text-gray-400" />
+        <div>
+          <h2 className="text-[15px] font-semibold text-gray-900">Password</h2>
+          <p className="text-[13px] text-gray-500">Send a password reset link to your email.</p>
         </div>
+      </div>
+      <div className="mt-5">
+        {sent ? (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">
+            <Check className="size-4" />
+            Reset link sent to {email}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={sendReset}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-[13px] font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+            Send password reset email
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DangerZone({ userEmail }: { userEmail: string }) {
+  const [confirm, setConfirm] = useState(false);
+  const [input, setInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+
+  async function deleteAccount() {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete account");
+      const supabase = createBrowserClient();
+      await supabase.auth.signOut();
+      router.push("/?deleted=1");
+    } catch {
+      toast.error("Failed to delete account. Contact support@formlayer.co.");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-red-200 bg-white p-8">
+      <div className="flex items-center gap-3">
+        <AlertTriangle className="size-5 text-red-500" />
+        <div>
+          <h2 className="text-[15px] font-semibold text-gray-900">Danger zone</h2>
+          <p className="text-[13px] text-gray-500">Permanently delete your account and all formulation data.</p>
+        </div>
+      </div>
+      <div className="mt-5">
+        {!confirm ? (
+          <button
+            type="button"
+            onClick={() => setConfirm(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-2.5 text-[13px] font-medium text-red-600 transition hover:bg-red-50"
+          >
+            <Trash2 className="size-4" />
+            Delete my account
+          </button>
+        ) : (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+            <p className="text-[13px] font-medium text-red-900">This will permanently delete your account and all formulations. This cannot be undone.</p>
+            <p className="mt-2 text-[12px] text-red-600">Type <strong>{userEmail}</strong> to confirm:</p>
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder={userEmail}
+              className="mt-2 h-9 w-full rounded-lg border border-red-200 bg-white px-3 text-[13px] outline-none focus:border-red-400"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={deleteAccount}
+                disabled={input !== userEmail || deleting}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-red-700 disabled:opacity-40"
+              >
+                {deleting && <Loader2 className="size-3.5 animate-spin" />}
+                Delete account
+              </button>
+              <button
+                type="button"
+                onClick={() => { setConfirm(false); setInput(""); }}
+                className="rounded-lg border border-black/[0.08] px-4 py-2 text-[13px] font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

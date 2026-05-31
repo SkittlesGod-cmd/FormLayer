@@ -73,6 +73,8 @@ function AuthCallbackContent() {
               avatar_url: data.user.user_metadata?.avatar_url || null,
             });
             console.log("Profile creation:", profileError ? "failed" : "success");
+            // Send welcome email (fire-and-forget)
+            fetch("/api/email/welcome", { method: "POST" }).catch(() => {});
           }
           
           setTimeout(() => router.push("/dashboard"), 1500);
