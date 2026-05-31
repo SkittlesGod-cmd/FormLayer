@@ -345,6 +345,126 @@ function CompareScoreTable({ a, b, axes }: {
   );
 }
 
+// ─── Ingredient autocomplete ──────────────────────────────────────────────────
+
+const INGREDIENT_SUGGESTIONS = [
+  "L-Theanine", "L-Tyrosine", "L-Carnitine", "L-Carnitine L-Tartrate", "Acetyl-L-Carnitine (ALCAR)",
+  "L-Glutamine", "L-Arginine", "L-Citrulline", "Citrulline Malate", "Beta-Alanine", "Taurine",
+  "Glycine", "L-Lysine", "L-Tryptophan", "5-HTP", "GABA", "N-Acetyl L-Tyrosine (NALT)",
+  "Alpha-GPC", "CDP-Choline (Citicoline)", "Phosphatidylserine",
+  "Ashwagandha (KSM-66®)", "Ashwagandha (Sensoril®)", "Rhodiola Rosea", "Holy Basil (Tulsi)",
+  "Eleuthero Root", "Schisandra Berry", "Maca Root", "Panax Ginseng", "American Ginseng",
+  "Bacopa Monnieri", "Lion's Mane (Hericium erinaceus)", "Ginkgo Biloba",
+  "Huperzine A", "Pterostilbene", "Uridine Monophosphate", "PQQ (Pyrroloquinoline Quinone)",
+  "Vitamin A (Retinol)", "Vitamin B1 (Thiamine HCl)", "Vitamin B2 (Riboflavin)",
+  "Vitamin B3 (Niacinamide)", "Vitamin B5 (Pantothenic Acid)", "Vitamin B6 (Pyridoxine HCl)",
+  "Vitamin B7 (Biotin)", "Vitamin B9 (5-MTHF)", "Vitamin B12 (Methylcobalamin)",
+  "Vitamin C (Ascorbic Acid)", "Vitamin D3 (Cholecalciferol)", "Vitamin E (Mixed Tocopherols)",
+  "Vitamin K1 (Phylloquinone)", "Vitamin K2 (MK-7)",
+  "Magnesium Glycinate", "Magnesium Malate", "Magnesium Citrate", "Magnesium L-Threonate",
+  "Zinc Picolinate", "Zinc Bisglycinate", "Iron Bisglycinate", "Selenium (Selenomethionine)",
+  "Chromium Picolinate", "Calcium Citrate", "Potassium Citrate", "Manganese Bisglycinate",
+  "Creatine Monohydrate", "Creatine HCl", "Caffeine Anhydrous", "Caffeine (DiCaffeine Malate)",
+  "TeaCrine® (Theacrine)", "Dynamine® (Methylliberine)", "Betaine Anhydrous",
+  "Beetroot Extract", "Agmatine Sulfate", "HMB (β-Hydroxy β-Methylbutyrate)",
+  "Melatonin", "Valerian Root Extract", "Passionflower Extract", "Lemon Balm Extract",
+  "Chamomile Extract", "Apigenin",
+  "CoQ10 (Ubiquinol)", "CoQ10 (Ubiquinone)", "Alpha-Lipoic Acid (ALA)", "Resveratrol",
+  "Quercetin", "Curcumin (Longvida®)", "Curcumin (BCM-95®)", "Turmeric Root Extract",
+  "Astaxanthin", "Lycopene", "Lutein", "Zeaxanthin",
+  "NMN (Nicotinamide Mononucleotide)", "NR (Nicotinamide Riboside)", "Spermidine",
+  "Berberine HCl", "Bitter Melon Extract", "Cinnamon Bark Extract",
+  "DIM (Diindolylmethane)", "Tongkat Ali (LJ100®)", "Fadogia Agrestis", "DHEA",
+  "Fish Oil (EPA+DHA)", "Krill Oil", "Algae DHA", "MCT Oil Powder",
+  "Milk Thistle (Silymarin 80%)", "Saw Palmetto", "Elderberry Extract",
+  "Green Tea Extract (50% EGCG)", "Grape Seed Extract", "Pycnogenol® (Pine Bark)",
+  "Garlic Extract", "Ginger Root Extract",
+];
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <strong className="font-semibold text-brand">{text.slice(idx, idx + query.length)}</strong>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+interface AutocompleteProps {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit?: () => void;
+  placeholder?: string;
+  inputClassName?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  disabled?: boolean;
+  label?: string;
+  labelCls?: string;
+}
+
+function ResearchAutocomplete({
+  value, onChange, onSubmit, placeholder, inputClassName, inputRef, disabled, label, labelCls,
+}: AutocompleteProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const suggestions = value.trim().length >= 1
+    ? INGREDIENT_SUGGESTIONS.filter(s => s.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
+    : [];
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      {label && (
+        <span className={cn("absolute left-3 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-bold z-10 pointer-events-none", labelCls)}>
+          {label}
+        </span>
+      )}
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => { if (value.trim().length >= 1) setOpen(true); }}
+        onKeyDown={e => {
+          if (e.key === "Enter") { setOpen(false); onSubmit?.(); }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete="off"
+        className={inputClassName}
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute left-0 top-full z-50 mt-0.5 max-h-52 w-full overflow-y-auto rounded-xl border border-black/[0.08] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.10)]">
+          {suggestions.map(s => (
+            <li key={s}>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false); }}
+                className="flex w-full items-center px-3 py-2 text-left text-[13px] text-gray-800 hover:bg-brand/[0.05] hover:text-brand"
+              >
+                {highlightMatch(s, value)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const CHARTS_TAB = "__charts__";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -729,31 +849,42 @@ export default function ResearchPage() {
 
           {mode !== "compare" ? (
             <form onSubmit={e => { e.preventDefault(); handleSearch(); }} className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-              <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-gray-400 z-10 pointer-events-none" />
+              <ResearchAutocomplete
+                inputRef={searchRef}
+                value={query}
+                onChange={setQuery}
+                onSubmit={handleSearch}
                 placeholder={mode === "ingredient" ? "Search an ingredient — e.g. Ashwagandha KSM-66, Creatine, Alpha GPC…" : "Search a health goal — e.g. Sleep quality, Cognitive performance…"}
-                className="h-14 w-full rounded-2xl border border-black/[0.10] bg-white pl-11 pr-36 text-[14px] shadow-[0_2px_12px_rgba(0,0,0,0.06)] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
+                inputClassName="h-14 w-full rounded-2xl border border-black/[0.10] bg-white pl-11 pr-36 text-[14px] shadow-[0_2px_12px_rgba(0,0,0,0.06)] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
               />
               <button type="submit" disabled={!query.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-xl bg-gray-950 px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40">
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-xl bg-gray-950 px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40 z-10">
                 <Search className="size-3.5" /> Research
               </button>
             </form>
           ) : (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded-md bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand">A</span>
-                  <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
-                    placeholder="e.g. L-Theanine"
-                    className="h-12 w-full rounded-xl border border-brand/20 bg-white pl-10 pr-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15" />
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-600">B</span>
-                  <input type="text" value={compareQuery} onChange={e => setCompareQuery(e.target.value)}
-                    placeholder="e.g. Caffeine"
-                    className="h-12 w-full rounded-xl border border-purple-200 bg-white pl-10 pr-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100" />
-                </div>
+                <ResearchAutocomplete
+                  inputRef={searchRef}
+                  value={query}
+                  onChange={setQuery}
+                  onSubmit={handleCompare}
+                  placeholder="e.g. L-Theanine"
+                  label="A"
+                  labelCls="bg-brand/10 text-brand"
+                  inputClassName="h-12 w-full rounded-xl border border-brand/20 bg-white pl-10 pr-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
+                />
+                <ResearchAutocomplete
+                  value={compareQuery}
+                  onChange={setCompareQuery}
+                  onSubmit={handleCompare}
+                  placeholder="e.g. Caffeine"
+                  label="B"
+                  labelCls="bg-purple-100 text-purple-600"
+                  inputClassName="h-12 w-full rounded-xl border border-purple-200 bg-white pl-10 pr-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                />
               </div>
               <button type="button" onClick={handleCompare} disabled={!query.trim() || !compareQuery.trim()}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 py-3 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40">
@@ -815,19 +946,26 @@ export default function ResearchPage() {
 
       {/* ── TOP BAR ───────────────────────────────────────────────────────── */}
       <div className="mb-5 flex items-center gap-3 flex-wrap">
-        <form onSubmit={e => { e.preventDefault(); handleSearch(); }} className="flex flex-1 min-w-0 items-center gap-2">
+        <form onSubmit={e => { e.preventDefault(); mode === "compare" ? handleCompare() : handleSearch(); }} className="flex flex-1 min-w-0 items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-gray-400" />
-            <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-gray-400 z-10 pointer-events-none" />
+            <ResearchAutocomplete
+              inputRef={searchRef}
+              value={query}
+              onChange={setQuery}
+              onSubmit={() => mode === "compare" ? handleCompare() : handleSearch()}
               placeholder="Search ingredient or goal…"
-              className="h-9 w-full rounded-lg border border-black/[0.08] bg-white pl-9 pr-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15" />
+              inputClassName="h-9 w-full rounded-lg border border-black/[0.08] bg-white pl-9 pr-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
+            />
           </div>
           {mode === "compare" && (
-            <div className="relative">
-              <input type="text" value={compareQuery} onChange={e => setCompareQuery(e.target.value)}
-                placeholder="Compare with…"
-                className="h-9 w-36 rounded-lg border border-purple-200 bg-white px-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100" />
-            </div>
+            <ResearchAutocomplete
+              value={compareQuery}
+              onChange={setCompareQuery}
+              onSubmit={handleCompare}
+              placeholder="Compare with…"
+              inputClassName="h-9 w-36 rounded-lg border border-purple-200 bg-white px-3 text-[13px] outline-none placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+            />
           )}
           <button type="submit" disabled={isStreaming}
             onClick={mode === "compare" ? e => { e.preventDefault(); handleCompare(); } : undefined}
