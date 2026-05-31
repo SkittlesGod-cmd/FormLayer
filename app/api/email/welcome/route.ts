@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getResend, FROM_EMAIL } from "@/lib/email/resend";
 import { welcomeEmail } from "@/lib/email/templates";
+import { getErrorMessage } from "@/lib/errors";
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       html,
     });
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ ok: false, error: getErrorMessage(e, "Failed to send welcome email") }, { status: 500 });
   }
 }

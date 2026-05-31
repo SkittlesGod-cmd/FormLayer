@@ -9,7 +9,11 @@ AI-powered supplement formulation platform for brands and agencies. Evidence-bac
 - **Next.js 16** (App Router, Turbopack)
 - **Tailwind CSS v4**
 - **shadcn/ui** (via `@base-ui/react`)
-- **Supabase** (waitlist storage)
+- **Supabase** (auth, profiles, formulation workspace, sharing, collaboration)
+- **OpenRouter-compatible AI** (formulation builder, research, compliance, agent runs)
+- **Paddle** (subscription billing)
+- **Resend** (transactional email)
+- **Sentry / Vercel Analytics** (observability)
 - **Framer Motion** (scroll animations)
 - **next-sitemap** (sitemap + robots.txt)
 
@@ -23,7 +27,7 @@ npm install
 
 # 2. Environment variables
 cp .env.local.example .env.local
-# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Fill in Supabase, AI, billing, email, and analytics keys as needed.
 
 # 3. Start dev server
 npm run dev
@@ -33,37 +37,34 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Supabase Setup
 
-Run the following SQL in your Supabase project's SQL editor (Dashboard → SQL Editor):
+Run the schema and migration files in `lib/` against your Supabase project:
 
-```sql
-CREATE TABLE IF NOT EXISTS waitlist (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
-  full_name   TEXT        NOT NULL,
-  email       TEXT        NOT NULL UNIQUE,
-  company     TEXT        NOT NULL,
-  role        TEXT        NOT NULL,
-  brand_count TEXT        NOT NULL,
-  source      TEXT        NOT NULL
-);
+- `lib/supabase-auth-schema.sql`
+- `lib/supabase-formulations-schema.sql`
+- `lib/migrations/002_versioning_and_sharing.sql`
+- `lib/migrations/003_subscriptions.sql`
+- `lib/migrations/004_collaborators.sql`
+- `lib/migrations/005_accuracy_fields.sql`
+- `lib/migrations/006_agents.sql`
 
-ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public insert on waitlist"
-  ON waitlist
-  FOR INSERT
-  WITH CHECK (true);
-```
-
-Then copy your **Project URL** and **anon public key** from Dashboard → Project Settings → API into `.env.local`.
+Then copy your **Project URL**, anon/publishable key, and service role key from Dashboard → Project Settings → API into `.env.local`.
 
 ## Environment Variables
 
 | Variable | Description |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser-safe key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only Supabase admin key for webhooks, public share reads, and account deletion |
 | `NEXT_PUBLIC_SITE_URL` | Canonical site URL (e.g. `https://formlayer.co`) |
+| `NEXT_PUBLIC_APP_URL` | App origin used by server-to-server callbacks |
+| `OPENROUTER_API_KEY` | Server-only AI provider key |
+| `PADDLE_API_KEY` / `PADDLE_WEBHOOK_SECRET` | Paddle billing API and webhook verification |
+| `NEXT_PUBLIC_PADDLE_STARTER_PRICE_ID` / `NEXT_PUBLIC_PADDLE_PRO_PRICE_ID` | Paddle price IDs used by checkout |
+| `RESEND_API_KEY` / `FROM_EMAIL` | Transactional email |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional AI rate limiting |
+| `NCBI_API_KEY` | Optional PubMed higher rate limit |
+| `NEXT_PUBLIC_SENTRY_DSN` | Optional Sentry reporting |
 
 ## Build & Deploy
 
@@ -89,12 +90,9 @@ The `vercel.json` targets region `iad1` (US East) for lowest latency.
 | `/features` | Full feature breakdown |
 | `/pricing` | Pricing tiers |
 | `/for-agencies` | Agency-focused landing |
-| `/get-access` | Waitlist signup (noindex) |
-
-## Known Issue
-
-`app/(auth)/get-access/page.tsx` is a stub that conflicts with `app/get-access/page.tsx`. Delete it to silence the Turbopack warning:
-
-```bash
-rm 'app/(auth)/get-access/page.tsx'
-```
+| `/sign-in`, `/sign-up` | Auth flows |
+| `/dashboard` | Authenticated product workspace |
+| `/dashboard/formulations/new` | Guided AI formulation builder |
+| `/dashboard/formulations/[id]` | Formulation detail, compliance, research, handoff, sharing |
+| `/dashboard/agents` | Pro agent builder |
+| `/f/[token]` | Public read-only formulation share |

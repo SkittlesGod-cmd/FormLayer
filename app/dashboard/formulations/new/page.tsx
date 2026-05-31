@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,6 +25,8 @@ import {
   type ProductType,
 } from "@/lib/formulations/types";
 import { cn } from "@/lib/utils";
+import { parseJsonObject } from "@/lib/ai/json";
+import { getErrorMessage } from "@/lib/errors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ interface ComplianceResult {
   issues: Array<{ severity: string; ingredient: string | null; issue: string; detail: string }>;
   compliant_claims: string[];
   recommendations: string[];
+  manual_review_required?: boolean;
+  review_disclaimer?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,24 +85,6 @@ const CONSUMER_OPTIONS = [
   "General wellness", "Athletic performance", "Cognitive health",
   "Women's health", "Men's health", "Senior health",
   "Weight management", "Gut & digestive health",
-];
-
-const PHASE_LABELS: Record<Phase, string> = {
-  intake: "Setup",
-  researching: "Research",
-  research_review: "Research",
-  formulating: "Formulation",
-  formulation_review: "Formulation",
-  refining: "Formulation",
-  compliance_running: "Compliance",
-  compliance_refining: "Compliance",
-  complete: "Complete",
-};
-
-const PHASES_ORDERED: Phase[] = [
-  "intake", "researching", "research_review",
-  "formulating", "formulation_review", "refining",
-  "compliance_running", "complete",
 ];
 
 const PHASE_STEPS = [
@@ -118,69 +103,50 @@ function stepIndex(phase: Phase): number {
   return 4;
 }
 
-function repairJson(s: string): any | null {
-  // Try as-is first
-  try { return JSON.parse(s); } catch {}
-
-  // Close any unclosed strings, arrays, and objects caused by truncation
-  let inString = false;
-  let escaped = false;
-  const stack: string[] = [];
-
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === "\\" && inString) { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === "{") stack.push("}");
-    else if (ch === "[") stack.push("]");
-    else if (ch === "}" || ch === "]") stack.pop();
-  }
-
-  // If we're mid-string, close it
-  const suffix = (inString ? '"' : "") + stack.reverse().join("");
-  if (suffix) {
-    // Also strip a trailing comma before closing
-    const trimmed = s.replace(/,\s*$/, "");
-    try { return JSON.parse(trimmed + suffix); } catch {}
-    // Try removing the last incomplete property line
-    const lastComma = trimmed.lastIndexOf(",");
-    if (lastComma > 0) {
-      try { return JSON.parse(trimmed.slice(0, lastComma) + suffix); } catch {}
-    }
-  }
-  return null;
-}
-
 function parseFormulationJson(text: string): ParsedFormulation | null {
-  function mapRaw(raw: any): ParsedFormulation | null {
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function evidenceGrade(value: unknown): "A" | "B" | "C" | undefined {
+    return value === "A" || value === "B" || value === "C" ? value : undefined;
+  }
+
+  function doseAssessment(value: unknown): ParsedIngredient["dose_assessment"] {
+    return value === "at_studied_dose" || value === "below_studied_dose" || value === "above_studied_dose"
+      ? value
+      : undefined;
+  }
+
+  function mapRaw(raw: unknown): ParsedFormulation | null {
     if (!raw || typeof raw !== "object") return null;
-    const ingredients = (raw.ingredients ?? [])
-      .filter((ing: any) => ing && ing.name)
-      .map((ing: any, i: number) => ({
+    const source = raw as Record<string, unknown>;
+    const rawIngredients = Array.isArray(source.ingredients) ? source.ingredients : [];
+    const ingredients = rawIngredients
+      .filter((ing): ing is Record<string, unknown> => isRecord(ing) && Boolean(ing.name))
+      .map((ing, i) => ({
         id: `parsed-${i}`,
-        name: ing.name ?? "",
+        name: String(ing.name ?? ""),
         dose: String(ing.dose ?? ""),
-        unit: ing.unit ?? "mg",
-        rationale: ing.rationale ?? "",
-        evidence_grade: ing.evidence_grade ?? undefined,
-        clinical_dose_range: ing.clinical_dose_range ?? undefined,
-        dose_assessment: ing.dose_assessment ?? undefined,
+        unit: typeof ing.unit === "string" ? ing.unit : "mg",
+        rationale: typeof ing.rationale === "string" ? ing.rationale : "",
+        evidence_grade: evidenceGrade(ing.evidence_grade),
+        clinical_dose_range: typeof ing.clinical_dose_range === "string" ? ing.clinical_dose_range : undefined,
+        dose_assessment: doseAssessment(ing.dose_assessment),
       }));
-    if (!raw.name || ingredients.length === 0) return null;
+    if (!source.name || ingredients.length === 0) return null;
     return {
-      name: raw.name,
-      description: raw.description ?? "",
+      name: String(source.name),
+      description: typeof source.description === "string" ? source.description : "",
       ingredients,
-      serving_size: raw.serving_size ?? "",
-      total_fill_weight_mg: raw.total_fill_weight_mg ?? 0,
-      expected_outcomes: raw.expected_outcomes ?? "",
+      serving_size: typeof source.serving_size === "string" ? source.serving_size : "",
+      total_fill_weight_mg: Number(source.total_fill_weight_mg ?? 0) || 0,
+      expected_outcomes: typeof source.expected_outcomes === "string" ? source.expected_outcomes : "",
     };
   }
 
   function tryParse(candidate: string): ParsedFormulation | null {
-    const direct = repairJson(candidate);
+    const direct = parseJsonObject(candidate);
     if (direct) { const m = mapRaw(direct); if (m) return m; }
     return null;
   }
@@ -312,8 +278,6 @@ function FeedbackBox({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function NewFormulationPage() {
-  const router = useRouter();
-
   const [phase, setPhase] = useState<Phase>("intake");
   const [intake, setIntake] = useState<Partial<IntakeData>>({});
   const [streaming, setStreaming] = useState(false);
@@ -421,8 +385,10 @@ export default function NewFormulationPage() {
         accumulated += decoder.decode(value, { stream: true });
         setStreamContent(accumulated);
       }
-    } catch (e: any) {
-      if (e.name !== "AbortError") toast.error(e.message ?? "AI request failed");
+    } catch (e: unknown) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        toast.error(getErrorMessage(e, "AI request failed"));
+      }
     } finally {
       setStreaming(false);
     }
@@ -542,8 +508,8 @@ export default function NewFormulationPage() {
       setComplianceResult(data);
       await updateStatus(id, "compliant");
       setPhase("complete");
-    } catch (e: any) {
-      toast.error(e.message ?? "Compliance check failed");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Compliance check failed"));
       setPhase("formulation_review");
     }
   }
@@ -1071,6 +1037,11 @@ export default function NewFormulationPage() {
                     className="w-full max-w-lg space-y-3"
                   >
                     <p className="text-center text-[12px] font-semibold text-gray-500">{complianceResult.summary}</p>
+                    {complianceResult.review_disclaimer && (
+                      <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-center text-[11px] leading-relaxed text-amber-700">
+                        {complianceResult.review_disclaimer}
+                      </p>
+                    )}
 
                     {complianceResult.issues.length > 0 && (
                       <div className="space-y-2">

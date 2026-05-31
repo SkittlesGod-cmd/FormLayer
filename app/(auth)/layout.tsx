@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "Sign In",
   description: "Sign in to your FormLayer account",
@@ -23,10 +25,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="pointer-events-none absolute bottom-0 -left-20 size-72 rounded-full bg-brand/10 blur-3xl" />
 
         <div className="relative z-10">
-          <a href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-brand" />
             <span className="text-[15px] font-semibold tracking-[-0.01em] text-white">FormLayer</span>
-          </a>
+          </Link>
 
           <div className="mt-16">
             <h2 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.03em] text-white">

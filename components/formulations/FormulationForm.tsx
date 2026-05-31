@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import {
+  useForm,
+  useFieldArray,
+  Controller,
+  type Control,
+  type Resolver,
+  type UseFormRegister,
+  type UseFormSetValue,
+  type UseFormWatch,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { GripVertical, Plus, Trash2, Sparkles, Loader2, X, Info, Check } from "lucide-react";
 
@@ -19,7 +28,6 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -38,6 +46,7 @@ import {
   type FormulationIngredient,
   type ProductType,
 } from "@/lib/formulations/types";
+import { getErrorMessage } from "@/lib/errors";
 
 export type FormulationFormValues = CreateFormulationInput & {
   ingredients: FormulationIngredient[];
@@ -81,8 +90,8 @@ const UNIT_OPTIONS = ["mg", "mcg", "g", "IU", "CFU", "mL", "%DV", "mg NE", "mg A
 interface SortableIngredientRowProps {
   fieldId: string;
   idx: number;
-  register: ReturnType<typeof useForm<FormulationFormValues>>["register"];
-  control: ReturnType<typeof useForm<FormulationFormValues>>["control"];
+  register: UseFormRegister<FormulationFormValues>;
+  control: Control<FormulationFormValues>;
   onRemove: () => void;
 }
 
@@ -174,13 +183,11 @@ const COMMON_EXCIPIENTS = [
 ];
 
 function ExcipientsSection({
-  register,
   watch,
   setValue,
 }: {
-  register: any;
-  watch: any;
-  setValue: any;
+  watch: UseFormWatch<FormulationFormValues>;
+  setValue: UseFormSetValue<FormulationFormValues>;
 }) {
   const excipients: FormulationExcipient[] = watch("excipients") ?? [];
 
@@ -267,7 +274,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
   const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const { register, handleSubmit, control, watch, formState: { errors }, setValue } = useForm<FormulationFormValues>({
-    resolver: zodResolver(createFormulationSchema) as any,
+    resolver: zodResolver(createFormulationSchema) as unknown as Resolver<FormulationFormValues>,
     defaultValues: {
       name: "", description: "", product_type: null, status: "draft",
       target_dose: "", serving_size: "", capsule_size: "",
@@ -321,8 +328,8 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
       });
       setSuggestOpen(false);
       setSuggestGoal("");
-    } catch (e: any) {
-      setSuggestError(e.message ?? "Suggestion failed");
+    } catch (e: unknown) {
+      setSuggestError(getErrorMessage(e, "Suggestion failed"));
     } finally {
       setSuggesting(false);
     }
@@ -365,7 +372,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
               className={cn(fieldClass, errors.name && "border-red-400")}
             />
             {errors.name && <p className="text-[11px] text-red-500">{errors.name.message}</p>}
-            <FieldHint>Use a name that reflects the product's primary benefit or SKU identifier.</FieldHint>
+            <FieldHint>Use a name that reflects the product&apos;s primary benefit or SKU identifier.</FieldHint>
           </div>
 
           <div className="md:col-span-2 flex flex-col gap-1.5">
@@ -377,7 +384,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
               placeholder="Describe what this product is designed to do — e.g. 'Supports cognitive performance and sustained focus in healthy adults.' This text informs compliance review and label copy."
               className="w-full rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15 resize-none"
             />
-            <FieldHint>Keep to structure/function claims only. Avoid disease claims (e.g. "treats", "cures").</FieldHint>
+            <FieldHint>Keep to structure/function claims only. Avoid disease claims (e.g. &quot;treats&quot;, &quot;cures&quot;).</FieldHint>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -492,7 +499,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
           {watchedProductType === "tablet" && (
             <div className="md:col-span-2">
               <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-4 py-3 text-[12px] text-amber-700">
-                Tablet specs are managed in the manufacturing dossier. Record your total tablet weight in "Total active dose" above.
+                Tablet specs are managed in the manufacturing dossier. Record your total tablet weight in &quot;Total active dose&quot; above.
               </div>
             </div>
           )}
@@ -586,7 +593,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
             <div className="rounded-lg border border-dashed border-black/[0.08] py-10 text-center">
               <p className="text-[12px] font-medium text-gray-500">No ingredients yet</p>
               <p className="mt-1 text-[11px] text-gray-400">
-                Use "AI suggest" to auto-populate from a health goal, or add manually.
+                Use &quot;AI suggest&quot; to auto-populate from a health goal, or add manually.
               </p>
             </div>
           ) : (
@@ -641,7 +648,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
       </section>
 
       {/* Excipients */}
-      <ExcipientsSection register={register} watch={watch} setValue={setValue} />
+      <ExcipientsSection watch={watch} setValue={setValue} />
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2.5">

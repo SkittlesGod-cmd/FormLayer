@@ -1,12 +1,22 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { ProductType } from "@/lib/formulations/types";
 
 interface Props {
   productType: ProductType | string;
   complianceScore?: number | null;
 }
+
+const PARTICLE_COLORS = ["#6366f1", "#818cf8", "#10b981", "#f59e0b", "#3b82f6"];
+const CELEBRATION_PARTICLES = Array.from({ length: 20 }, (_, i) => ({
+  left: `${10 + ((i * 37) % 80)}%`,
+  top: `${10 + ((i * 29) % 60)}%`,
+  color: PARTICLE_COLORS[i % PARTICLE_COLORS.length],
+  y: -40 - ((i * 17) % 60),
+  x: (i * 23) % 60 - 30,
+  delay: 0.3 + ((i * 11) % 10) / 10,
+}));
 
 function CapsuleAnimation() {
   return (
@@ -513,24 +523,24 @@ export function ProductAnimation({ productType, complianceScore }: Props) {
 
       {/* Confetti-style particles */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {CELEBRATION_PARTICLES.map((particle, i) => (
           <motion.div
             key={i}
             className="absolute size-1.5 rounded-full"
             style={{
-              left: `${10 + Math.random() * 80}%`,
-              top: `${10 + Math.random() * 60}%`,
-              backgroundColor: ["#6366f1", "#818cf8", "#10b981", "#f59e0b", "#3b82f6"][i % 5],
+              left: particle.left,
+              top: particle.top,
+              backgroundColor: particle.color,
             }}
             initial={{ opacity: 0, scale: 0, y: 0 }}
             animate={{
               opacity: [0, 1, 0],
               scale: [0, 1.5, 0],
-              y: [0, -40 - Math.random() * 60],
-              x: [(Math.random() - 0.5) * 60],
+              y: [0, particle.y],
+              x: [particle.x],
             }}
             transition={{
-              delay: 0.3 + Math.random() * 1,
+              delay: particle.delay,
               duration: 1.5,
               ease: "easeOut",
             }}

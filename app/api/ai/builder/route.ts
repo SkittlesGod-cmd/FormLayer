@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/prompts";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { getErrorMessage } from "@/lib/errors";
 
 const bodySchema = z.object({
   phase: z.union([
@@ -143,7 +144,7 @@ Apply every fix identified in the compliance analysis. Output the complete revis
         "X-Accel-Buffering": "no",
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "AI request failed" }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: getErrorMessage(err, "AI request failed") }, { status: 500 });
   }
 }

@@ -1,25 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
 const STORAGE_KEY = "fl_cookie_consent";
 
 export function CookieConsent() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
+  const [visible, setVisible] = useState(() => {
+    if (typeof window === "undefined") return false;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        setVisible(true);
-      }
+      return !localStorage.getItem(STORAGE_KEY);
     } catch {
       // localStorage may be unavailable in some environments
+      return false;
     }
-  }, []);
+  });
 
-  function accept() {
+  function dismiss() {
     try {
       localStorage.setItem(STORAGE_KEY, "1");
     } catch {
@@ -35,24 +32,32 @@ export function CookieConsent() {
       }`}
       role="dialog"
       aria-label="Cookie consent"
+      aria-describedby="cookie-desc"
     >
       <div className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_8px_32px_rgba(0,0,0,0.10)]">
-        <p className="text-[13px] leading-relaxed text-gray-600">
-          We use essential cookies for authentication and session management. No advertising cookies.
+        <p id="cookie-desc" className="text-[13px] leading-relaxed text-gray-600">
+          We use essential cookies for authentication and session management only — no advertising or tracking cookies.
         </p>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={accept}
+            onClick={dismiss}
             className="rounded-full bg-gray-950 px-5 py-2 text-[13px] font-medium text-white transition hover:bg-gray-800"
           >
             Accept
           </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="rounded-full border border-black/[0.08] px-5 py-2 text-[13px] font-medium text-gray-600 transition hover:bg-gray-50"
+          >
+            Decline non-essential
+          </button>
           <Link
             href="/privacy"
-            className="text-[13px] font-medium text-gray-500 transition hover:text-gray-950"
+            className="text-[13px] text-gray-400 transition hover:text-gray-700"
           >
-            Learn more
+            Privacy policy
           </Link>
         </div>
       </div>

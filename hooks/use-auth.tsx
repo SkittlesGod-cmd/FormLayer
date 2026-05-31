@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@/utils/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface AuthState {
   user: User | null;
@@ -39,7 +40,22 @@ export function useAuth() {
   }, [supabase]);
 
   useEffect(() => {
-    fetchSession();
+    let active = true;
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        if (!active) return;
+        if (error) throw error;
+        setState((prev) => ({
+          ...prev,
+          session,
+          user: session?.user ?? null,
+          isLoading: false,
+        }));
+      })
+      .catch(() => {
+        if (active) setState((prev) => ({ ...prev, isLoading: false }));
+      });
 
     const {
       data: { subscription },
@@ -61,7 +77,10 @@ export function useAuth() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [supabase, fetchSession]);
 
   return state;
@@ -95,9 +114,10 @@ export function useSignIn() {
         toast.success("Check your email for the magic link!");
         return { sent: true };
       }
-    } catch (error: any) {
-      toast.error(error.message || "Sign in failed");
-      return { error: error.message };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Sign in failed");
+      toast.error(message);
+      return { error: message };
     } finally {
       setIsLoading(false);
     }
@@ -131,9 +151,10 @@ export function useSignUp() {
       if (error) throw error;
       toast.success("Account created! Check your email to verify.");
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || "Sign up failed");
-      return { error: error.message };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Sign up failed");
+      toast.error(message);
+      return { error: message };
     } finally {
       setIsLoading(false);
     }
@@ -153,8 +174,8 @@ export function useSignOut() {
       if (error) throw error;
       toast.success("Signed out successfully");
       window.location.href = "/";
-    } catch (error: any) {
-      toast.error(error.message || "Sign out failed");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Sign out failed"));
     } finally {
       setIsLoading(false);
     }
@@ -187,9 +208,10 @@ export function useUpdateProfile() {
       if (error) throw error;
       toast.success("Profile updated!");
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || "Update failed");
-      return { error: error.message };
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, "Update failed");
+      toast.error(message);
+      return { error: message };
     } finally {
       setIsLoading(false);
     }

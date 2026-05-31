@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Beaker, Bot, ChevronDown, CreditCard, FlaskConical, LayoutDashboard, LogOut, User } from "lucide-react";
+import { Beaker, Bot, ChevronDown, CreditCard, FlaskConical, LayoutDashboard, Lock, LogOut, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
+import { toast } from "sonner";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -17,13 +19,19 @@ const NAV = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [authUser, setAuthUser] = useState<any>(null);
+  const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
+  const [isPro, setIsPro] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    createBrowserClient().auth.getUser().then(({ data: { user } }) => setAuthUser(user));
+    const supabase = createBrowserClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setAuthUser(user));
+    fetch("/api/billing/subscription")
+      .then(r => r.json())
+      .then(d => setIsPro(d?.subscription?.plan === "pro"))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -36,8 +44,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleSignOut = async () => {
     setSigningOut(true);
-    const res = await fetch("/api/auth/sign-out", { method: "POST" });
-    window.location.href = res.redirected ? res.url : "/";
+    try {
+      const res = await fetch("/api/auth/sign-out", { method: "POST" });
+      window.location.href = res.redirected ? res.url : "/";
+    } catch {
+      // Network error — fall back to client-side sign out
+      try {
+        await createBrowserClient().auth.signOut();
+        window.location.href = "/";
+      } catch {
+        toast.error("Sign out failed. Please refresh and try again.");
+        setSigningOut(false);
+      }
+    }
   };
 
   const displayName =
@@ -68,25 +87,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Center nav */}
           <nav className="flex items-center gap-1">
-            {NAV.map(({ href, label, exact, pro }) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "relative flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium transition-colors rounded-md",
-                  isActive(href, exact)
-                    ? "text-gray-950 bg-black/[0.05]"
-                    : "text-gray-500 hover:text-gray-900 hover:bg-black/[0.03]"
-                )}
-              >
-                {label}
-                {pro && (
-                  <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand">
-                    Pro
-                  </span>
-                )}
-              </Link>
-            ))}
+            {NAV.map(({ href, label, exact, pro }) => {
+              const locked = pro && !isPro;
+              return locked ? (
+                <Link
+                  key={href}
+                  href="/dashboard/billing"
+                  title="Upgrade to Pro to access Agents"
+                  className="relative flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium transition-colors rounded-md text-gray-300 cursor-not-allowed"
+                >
+                  {label}
+                  <Lock className="size-3 text-gray-300" />
+                </Link>
+              ) : (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "relative flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium transition-colors rounded-md",
+                    isActive(href, exact)
+                      ? "text-gray-950 bg-black/[0.05]"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-black/[0.03]"
+                  )}
+                >
+                  {label}
+                  {pro && (
+                    <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand">
+                      Pro
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* User menu */}

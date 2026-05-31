@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 const GoogleIcon = () => (
   <svg className="size-4" viewBox="0 0 24 24">
@@ -24,7 +25,7 @@ const GoogleIcon = () => (
 const schema = z
   .object({
     full_name: z.string().min(2, "Name must be at least 2 characters"),
-    company: z.string().min(1, "Company name is required"),
+    company: z.string().optional(),
     email: z.string().min(1, "Email is required").email("Invalid email"),
     password: z
       .string()
@@ -85,8 +86,8 @@ export default function SignUpPage() {
       });
       if (error) throw error;
       setSuccess(true);
-    } catch (e: any) {
-      toast.error(e.message || "Sign up failed");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Sign up failed"));
     } finally {
       setLoading(false);
     }
@@ -143,15 +144,15 @@ export default function SignUpPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="full_name" className={labelClass}>Full name <span className="text-red-400">*</span></Label>
               <Input {...register("full_name")} id="full_name" type="text" placeholder="Alex Rivera" autoComplete="name" className={cn(inputClass, errors.full_name && "border-red-400")} />
               {errors.full_name && <p className="text-[11px] text-red-500">{errors.full_name.message}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="company" className={labelClass}>Company <span className="text-red-400">*</span></Label>
-              <Input {...register("company")} id="company" type="text" placeholder="NutriVive Co." autoComplete="organization" className={cn(inputClass, errors.company && "border-red-400")} />
+              <Label htmlFor="company" className={labelClass}>Company <span className="text-[11px] text-gray-400 font-normal">(optional)</span></Label>
+              <Input {...register("company")} id="company" type="text" placeholder="Your company or brand" autoComplete="organization" className={cn(inputClass, errors.company && "border-red-400")} />
               {errors.company && <p className="text-[11px] text-red-500">{errors.company.message}</p>}
             </div>
           </div>

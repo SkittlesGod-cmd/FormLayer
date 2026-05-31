@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 const forgotPasswordSchema = z.object({
   email: z.string().min(1, "Email is required").email("Please enter a valid email"),
@@ -43,8 +44,8 @@ export default function ForgotPasswordPage() {
 
       if (error) throw error;
       setIsSuccess(true);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to send reset email");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to send reset email"));
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +66,7 @@ export default function ForgotPasswordPage() {
             Click the link in the email to reset your password.
           </p>
           <p className="mt-6 text-sm text-gray-500">
-            Didn't receive it? Check your spam folder or{" "}
+            Didn&apos;t receive it? Check your spam folder or{" "}
             <button
               onClick={() => setIsSuccess(false)}
               className="text-brand hover:underline"
@@ -96,7 +97,7 @@ export default function ForgotPasswordPage() {
         <div className="mb-7">
           <h1 className="text-2xl font-bold text-gray-900">Forgot password?</h1>
           <p className="mt-1.5 text-sm text-gray-500">
-            Enter your email and we'll send you a reset link
+            Enter your email and we&apos;ll send you a reset link
           </p>
         </div>
 

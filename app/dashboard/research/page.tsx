@@ -5,6 +5,7 @@ import { Search, Loader2, BookOpen, Target, Plus, Check, ChevronDown } from "luc
 import { cn } from "@/lib/utils";
 import { StreamingMarkdown } from "@/components/ui/streaming-markdown";
 import type { Formulation } from "@/lib/formulations/types";
+import { getErrorMessage } from "@/lib/errors";
 
 type Mode = "ingredient" | "goal";
 
@@ -42,6 +43,7 @@ export default function ResearchPage() {
   const [addFormulationId, setAddFormulationId] = useState("");
   const [adding, setAdding] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
+  const [addedFormulationId, setAddedFormulationId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [formulationsLoaded, setFormulationsLoaded] = useState(false);
 
@@ -83,8 +85,10 @@ export default function ResearchPage() {
         accumulated += decoder.decode(value, { stream: true });
         setContent(accumulated);
       }
-    } catch (e: any) {
-      if (e.name !== "AbortError") setError(e.message ?? "Research failed");
+    } catch (e: unknown) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setError(getErrorMessage(e, "Research failed"));
+      }
     } finally {
       setStreaming(false);
     }
@@ -107,6 +111,7 @@ export default function ResearchPage() {
   function openAddPanel() {
     setAddOpen(true);
     setAddSuccess(false);
+    setAddedFormulationId(null);
     setAddError(null);
     loadFormulations();
   }
@@ -137,9 +142,10 @@ export default function ResearchPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add ingredient");
       setAddSuccess(true);
+      setAddedFormulationId(addFormulationId);
       setAdding(false);
-    } catch (e: any) {
-      setAddError(e.message ?? "Failed to add ingredient");
+    } catch (e: unknown) {
+      setAddError(getErrorMessage(e, "Failed to add ingredient"));
       setAdding(false);
     }
   }
@@ -226,14 +232,11 @@ export default function ResearchPage() {
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-4">
           <p className="text-[13px] font-medium text-red-700">Research failed</p>
-          <p className="mt-1 text-[12px] text-red-500">{error}</p>
-          {error.includes("OPENROUTER_API_KEY") && (
-            <p className="mt-2 text-[12px] text-red-500">
-              Add your OpenRouter API key to{" "}
-              <code className="rounded bg-red-100 px-1 font-mono">.env.local</code> as{" "}
-              <code className="rounded bg-red-100 px-1 font-mono">OPENROUTER_API_KEY=sk-or-…</code>
-            </p>
-          )}
+          <p className="mt-1 text-[12px] text-red-500">
+            {error.includes("OPENROUTER_API_KEY") || error.includes("API key")
+              ? "AI research is temporarily unavailable. Please try again shortly or contact support@formlayer.co."
+              : error}
+          </p>
         </div>
       )}
 
@@ -282,9 +285,17 @@ export default function ResearchPage() {
               </p>
 
               {addSuccess ? (
-                <div className="flex items-center gap-2 text-[13px] text-emerald-600">
-                  <Check className="size-4" />
-                  Added successfully — open the formulation to review.
+                <div className="flex items-center gap-2 flex-wrap text-[13px] text-emerald-600">
+                  <Check className="size-4 shrink-0" />
+                  <span>Added to formulation.</span>
+                  {addedFormulationId && (
+                    <a
+                      href={`/dashboard/formulations/${addedFormulationId}`}
+                      className="font-medium underline underline-offset-2 hover:text-emerald-700"
+                    >
+                      Open formulation →
+                    </a>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-wrap items-end gap-3">

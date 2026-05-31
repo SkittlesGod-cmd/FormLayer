@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 const resetPasswordSchema = z
   .object({
@@ -88,8 +89,8 @@ export default function ResetPasswordPage() {
       setTimeout(() => {
         router.push("/sign-in");
       }, 3000);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to reset password");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to reset password"));
     } finally {
       setIsLoading(false);
     }

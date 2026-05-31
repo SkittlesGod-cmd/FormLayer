@@ -397,7 +397,7 @@ export default function HomePage() {
                 Still managing formulations in Google Sheets?
               </h3>
               <p className="mt-2 text-[14px] text-gray-500 max-w-xl">
-                No clinical evidence context, no compliance check, no version history. See exactly what you're trading away.
+                No clinical evidence context, no compliance check, no version history. See exactly what you&apos;re trading away.
               </p>
             </div>
             <Link

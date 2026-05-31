@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 const GoogleIcon = () => (
   <svg className="size-4" viewBox="0 0 24 24">
@@ -37,6 +38,8 @@ function SignInForm() {
   const [showPw, setShowPw] = useState(false);
   const [magicMode, setMagicMode] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +56,36 @@ function SignInForm() {
       provider,
       options: { redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(nextUrl)}` },
     });
-    if (error) { toast.error(error.message); setOauthLoading(null); }
+    if (error) {
+      toast.error(error.message);
+      setOauthLoading(null);
+    } else {
+      // Reset after 10s in case redirect doesn't happen (popup blocked, etc.)
+      setTimeout(() => setOauthLoading(null), 10_000);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
+    const supabase = createBrowserClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(nextUrl)}` },
+    });
+    setResending(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Link resent — check your inbox.");
+      setResendCooldown(30);
+      const interval = setInterval(() => {
+        setResendCooldown(c => {
+          if (c <= 1) { clearInterval(interval); return 0; }
+          return c - 1;
+        });
+      }, 1000);
+    }
   };
 
   const onSubmit = async (data: FormData) => {
@@ -72,8 +104,8 @@ function SignInForm() {
         if (error) throw error;
         window.location.href = nextUrl.startsWith("/") ? nextUrl : "/dashboard";
       }
-    } catch (e: any) {
-      toast.error(e.message || "Sign in failed");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Sign in failed"));
     } finally {
       setLoading(false);
     }
@@ -90,11 +122,21 @@ function SignInForm() {
           </div>
           <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-gray-950">Check your email</h2>
           <p className="mt-2 text-[13px] text-gray-500">
-            We sent a sign-in link to <span className="font-medium text-gray-900">{email}</span>
+            We sent a sign-in link to <span className="font-medium text-gray-900">{email}</span>.
+            The link expires in 60 minutes.
           </p>
-          <button onClick={() => setMagicSent(false)} className="mt-5 text-[12px] text-brand hover:underline">
-            Use a different email
-          </button>
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <button
+              onClick={handleResend}
+              disabled={resendCooldown > 0 || resending}
+              className="rounded-lg border border-black/[0.08] px-4 py-2 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              {resending ? "Sending…" : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend link"}
+            </button>
+            <button onClick={() => setMagicSent(false)} className="text-[12px] text-gray-400 hover:text-gray-700">
+              Use a different email
+            </button>
+          </div>
         </div>
       </div>
     );

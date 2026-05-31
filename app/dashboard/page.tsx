@@ -10,6 +10,7 @@ import {
   type FormulationStatus,
 } from "@/lib/formulations/types";
 import { OnboardingModal } from "@/components/dashboard/OnboardingModal";
+import type { User } from "@supabase/supabase-js";
 
 interface Formulation {
   id: string;
@@ -51,7 +52,7 @@ function relativeDate(iso: string) {
 function hour() { return new Date().getHours(); }
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [formulations, setFormulations] = useState<Formulation[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, draft: 0, active: 0, compliant: 0, avgCompliance: null as number | null });
@@ -228,31 +229,45 @@ export default function DashboardPage() {
               desc: "Start a capsule, tablet, softgel, gummy, powder, or topical — AI drafts your ingredient stack.",
               href: "/dashboard/formulations/new",
               cta: "Get started",
+              disabled: false,
             },
             {
               title: "Research an ingredient",
               desc: "Pull evidence-backed mechanisms, clinical dosing, safety limits, and synergy data for any compound.",
               href: "/dashboard/research",
               cta: "Open research",
+              disabled: false,
             },
             {
               title: "Compliance check",
               desc: "Run a regulatory review of your ingredient list and label claims against FDA structure/function rules.",
-              href: formulations.length > 0 ? "/dashboard/formulations" : "#",
+              href: "/dashboard/formulations",
               cta: formulations.length > 0 ? "Pick a formulation" : "Create a formulation first",
+              disabled: formulations.length === 0,
             },
-          ].map(({ title, desc, href, cta }) => (
-            <Link
-              key={title}
-              href={href}
-              className="group rounded-xl border border-black/[0.06] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition hover:border-black/[0.12] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
-            >
-              <p className="text-[13px] font-semibold text-gray-900">{title}</p>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-gray-500">{desc}</p>
-              <p className="mt-4 flex items-center gap-1 text-[12px] font-medium text-brand">
-                {cta} <ArrowRight className="size-3 transition group-hover:translate-x-0.5" />
-              </p>
-            </Link>
+          ].map(({ title, desc, href, cta, disabled }) => (
+            disabled ? (
+              <div
+                key={title}
+                className="rounded-xl border border-black/[0.06] bg-gray-50/60 p-5 opacity-60"
+              >
+                <p className="text-[13px] font-semibold text-gray-700">{title}</p>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-gray-400">{desc}</p>
+                <p className="mt-4 text-[12px] font-medium text-gray-400">{cta}</p>
+              </div>
+            ) : (
+              <Link
+                key={title}
+                href={href}
+                className="group rounded-xl border border-black/[0.06] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition hover:border-black/[0.12] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+              >
+                <p className="text-[13px] font-semibold text-gray-900">{title}</p>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-gray-500">{desc}</p>
+                <p className="mt-4 flex items-center gap-1 text-[12px] font-medium text-brand">
+                  {cta} <ArrowRight className="size-3 transition group-hover:translate-x-0.5" />
+                </p>
+              </Link>
+            )
           ))}
         </div>
       </div>
@@ -269,7 +284,7 @@ function EmptyState() {
       </div>
       <p className="text-[14px] font-semibold text-gray-900">No formulations yet</p>
       <p className="mt-1.5 mx-auto max-w-sm text-[12px] leading-relaxed text-gray-400">
-        Start by telling the AI what type of product you're building — capsule, tablet, softgel, gummy, or powder — and your health goal. It will draft an evidence-backed starting stack in seconds.
+        Start by telling the AI what type of product you&apos;re building — capsule, tablet, softgel, gummy, or powder — and your health goal. It will draft an evidence-backed starting stack in seconds.
       </p>
       <Link
         href="/dashboard/formulations/new"

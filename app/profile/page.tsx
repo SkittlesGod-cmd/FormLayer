@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { createBrowserClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { getErrorMessage } from "@/lib/errors";
 
 const profileSchema = z.object({
   full_name: z.string().min(2, "Name must be at least 2 characters"),
@@ -138,8 +139,8 @@ export default function ProfilePage() {
 
       toast.success("Profile updated successfully!");
       reset(data);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update profile");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Failed to update profile"));
     } finally {
       setIsSaving(false);
     }
@@ -149,10 +150,12 @@ export default function ProfilePage() {
     switch (plan) {
       case "pro":
         return { label: "Pro", color: "bg-brand text-white" };
-      case "agency":
-        return { label: "Agency", color: "bg-purple-600 text-white" };
+      case "starter":
+        return { label: "Starter", color: "bg-gray-800 text-white" };
+      case "free":
+        return { label: "Free", color: "bg-gray-100 text-gray-600" };
       default:
-        return { label: "Starter", color: "bg-gray-200 text-gray-700" };
+        return { label: plan ?? "Free", color: "bg-gray-100 text-gray-600" };
     }
   };
 
@@ -280,7 +283,10 @@ export default function ProfilePage() {
                   />
                 </div>
                 <p className="text-xs text-gray-400">
-                  Contact support to change your email address
+                  To change your email, contact{" "}
+                  <a href="mailto:support@formlayer.co" className="text-brand hover:underline">
+                    support@formlayer.co
+                  </a>
                 </p>
               </div>
 

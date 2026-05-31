@@ -4,6 +4,8 @@ import { getAIClient, MODEL } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { searchPubMed } from "@/lib/pubmed";
 import { z } from "zod";
+import { parseJsonObject } from "@/lib/ai/json";
+import type { FormulationIngredient } from "@/lib/formulations/types";
 
 const bodySchema = z.object({
   ingredient_id: z.string(),
@@ -40,6 +42,16 @@ For cost_per_kg_usd, use realistic bulk pricing ranges (typical US supplement su
 - Specialty compounds (NMN, urolithin A): 500–5000
 - Probiotics per billion CFU adjust accordingly`;
 
+const evidenceSchema = z.object({
+  evidence_grade: z.enum(["A", "B", "C"]),
+  clinical_dose_range: z.string().default(""),
+  dose_assessment: z.enum(["at_studied_dose", "below_studied_dose", "above_studied_dose"]),
+  rationale: z.string().default(""),
+  preferred_form: z.string().nullable().optional(),
+  form_recommendation: z.string().nullable().optional(),
+  cost_per_kg_usd: z.coerce.number().optional(),
+});
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -67,7 +79,10 @@ export async function POST(req: NextRequest) {
 
   if (!formulation) return NextResponse.json({ error: "Formulation not found" }, { status: 404 });
 
-  const ingredient = (formulation.ingredients as any[])?.find((i: any) => i.id === ingredient_id);
+  const ingredients = Array.isArray(formulation.ingredients)
+    ? (formulation.ingredients as FormulationIngredient[])
+    : [];
+  const ingredient = ingredients.find((i) => i.id === ingredient_id);
   if (!ingredient) return NextResponse.json({ error: "Ingredient not found" }, { status: 404 });
 
   const population = formulation.target_population ?? "general healthy adults";
@@ -99,14 +114,10 @@ Return the JSON object only.`;
     ),
   ]);
 
-  let aiResult: any = null;
+  let aiResult: z.infer<typeof evidenceSchema> | null = null;
   if (aiResponse.status === "fulfilled") {
-    const raw = aiResponse.value;
-    try {
-      const start = raw.indexOf("{");
-      const end = raw.lastIndexOf("}");
-      if (start !== -1 && end !== -1) aiResult = JSON.parse(raw.slice(start, end + 1));
-    } catch {}
+    const parsedEvidence = evidenceSchema.safeParse(parseJsonObject(aiResponse.value));
+    if (parsedEvidence.success) aiResult = parsedEvidence.data;
   }
 
   if (!aiResult || !aiResult.evidence_grade) {
@@ -121,7 +132,7 @@ Return the JSON object only.`;
   };
 
   // Patch ingredient in the formulation
-  const updatedIngredients = (formulation.ingredients as any[]).map((i: any) =>
+  const updatedIngredients = ingredients.map((i) =>
     i.id === ingredient_id ? { ...i, ...enriched } : i
   );
 

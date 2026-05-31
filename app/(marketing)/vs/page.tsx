@@ -98,7 +98,7 @@ export default function VsPage() {
           FormLayer vs. doing it manually
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-gray-500">
-          Most supplement teams manage formulation in Google Sheets, Notion docs, and scattered PubMed tabs. Here's what that costs you.
+          Most supplement teams manage formulation in Google Sheets, Notion docs, and scattered PubMed tabs. Here&apos;s what that costs you.
         </p>
       </div>
 

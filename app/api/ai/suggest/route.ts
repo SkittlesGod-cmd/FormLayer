@@ -4,10 +4,29 @@ import { getAIClient, MODEL } from "@/lib/ai/client";
 import { SUGGEST_SYSTEM } from "@/lib/ai/prompts";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { parseJsonObject } from "@/lib/ai/json";
+import { getErrorMessage } from "@/lib/errors";
 
 const bodySchema = z.object({
   goal: z.string().min(1).max(1000),
   existing_ingredients: z.array(z.string()).optional(),
+});
+
+const suggestionResponseSchema = z.object({
+  goal_summary: z.string().default(""),
+  evidence_base: z.string().default("emerging"),
+  rationale: z.string().default(""),
+  suggestions: z.array(z.object({
+    name: z.string().min(1),
+    dose: z.string().default(""),
+    unit: z.string().default("mg"),
+    evidence_grade: z.enum(["A", "B", "C"]).optional(),
+    clinical_dose_range: z.string().optional(),
+    dose_assessment: z.enum(["at_studied_dose", "below_studied_dose", "above_studied_dose"]).optional(),
+    rationale: z.string().optional(),
+    evidence_summary: z.string().optional(),
+    synergies: z.array(z.string()).optional(),
+  })).default([]),
 });
 
 export async function POST(req: NextRequest) {
@@ -46,16 +65,13 @@ export async function POST(req: NextRequest) {
     });
 
     const raw = message.choices[0]?.message?.content ?? "";
-    let result: any;
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      result = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
-    } catch {
+    const parsedResult = suggestionResponseSchema.safeParse(parseJsonObject(raw));
+    if (!parsedResult.success) {
       return NextResponse.json({ error: "AI returned malformed response" }, { status: 502 });
     }
 
-    return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "AI request failed" }, { status: 500 });
+    return NextResponse.json(parsedResult.data);
+  } catch (err: unknown) {
+    return NextResponse.json({ error: getErrorMessage(err, "AI request failed") }, { status: 500 });
   }
 }

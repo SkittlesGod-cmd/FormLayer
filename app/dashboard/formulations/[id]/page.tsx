@@ -38,6 +38,7 @@ import {
   type FormulationStatus,
 } from "@/lib/formulations/types";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors";
 
 type Tab = "overview" | "interactions" | "research" | "compliance" | "handoff" | "edit";
 
@@ -90,6 +91,8 @@ interface ComplianceResult {
   compliant_claims: string[];
   risky_claims: string[];
   recommendations: string[];
+  manual_review_required?: boolean;
+  review_disclaimer?: string;
 }
 
 // ─── Fill weight calculator ────────────────────────────────────────────────────
@@ -246,8 +249,8 @@ function OverviewTab({
       if (!res.ok) throw new Error(json.error ?? "Failed");
       onIngredientRefreshed(json.ingredient);
       toast.success(`Updated evidence for ${ing.name}`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to refresh");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Failed to refresh"));
     } finally {
       setRefreshing(null);
     }
@@ -478,8 +481,10 @@ function ResearchTab({ formulation }: { formulation: Formulation }) {
         accumulated += decoder.decode(value, { stream: true });
         setContent(accumulated);
       }
-    } catch (e: any) {
-      if (e.name !== "AbortError") setError(e.message);
+    } catch (e: unknown) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setError(getErrorMessage(e, "Research failed"));
+      }
     } finally {
       setStreaming(false);
     }
@@ -601,8 +606,8 @@ function InteractionsTab({ formulation }: { formulation: Formulation }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Interaction analysis failed");
       setResult(json as InteractionResult);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Interaction analysis failed"));
     } finally {
       setLoading(false);
     }
@@ -818,8 +823,8 @@ function ComplianceTab({
       if (!res.ok) throw new Error(json.error ?? "Compliance check failed");
       setResult(json as ComplianceResult);
       if (typeof json.score === "number") onScoreUpdate(json.score);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Compliance check failed"));
     } finally {
       setLoading(false);
     }
@@ -857,8 +862,8 @@ function ComplianceTab({
 
       // Remove fixed issue from result
       setResult(r => r ? { ...r, issues: r.issues.filter((_, i) => i !== idx) } : r);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to apply fix");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Failed to apply fix"));
     } finally {
       setApplyingFix(null);
     }
@@ -939,6 +944,11 @@ function ComplianceTab({
                    result.score >= 50 ? "Requires review" : "Major concerns"}
                 </p>
                 <p className="mt-1 text-[12px] leading-relaxed text-gray-500">{result.summary}</p>
+                {result.review_disclaimer && (
+                  <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+                    {result.review_disclaimer}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -951,7 +961,7 @@ function ComplianceTab({
                   Issues
                   <span className="ml-2 font-mono text-[11px] text-gray-400">{result.issues.length}</span>
                 </h2>
-                <p className="mt-0.5 text-[11px] text-gray-400">Click "Apply fix" to automatically patch the formulation notes.</p>
+                <p className="mt-0.5 text-[11px] text-gray-400">Click &quot;Apply fix&quot; to automatically patch the formulation notes.</p>
               </div>
               <ul className="divide-y divide-black/[0.04] p-2">
                 {result.issues.map((issue, i) => (
@@ -1161,8 +1171,10 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
         accumulated += decoder.decode(value, { stream: true });
         setBrief(accumulated);
       }
-    } catch (e: any) {
-      if (e.name !== "AbortError") setBriefError(e.message);
+    } catch (e: unknown) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) {
+        setBriefError(getErrorMessage(e, "Failed to generate brief"));
+      }
     } finally {
       setStreaming(false);
     }
@@ -1176,8 +1188,8 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to create share link");
       setShareToken(json.token);
-    } catch (e: any) {
-      setShareError(e.message);
+    } catch (e: unknown) {
+      setShareError(getErrorMessage(e, "Failed to create share link"));
     } finally {
       setShareLoading(false);
     }
@@ -1215,8 +1227,8 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
       });
       setInviteEmail("");
       toast.success(`Invited ${json.collaborator.invited_email}`);
-    } catch (e: any) {
-      setInviteError(e.message ?? "Failed to invite");
+    } catch (e: unknown) {
+      setInviteError(getErrorMessage(e, "Failed to invite"));
     } finally {
       setInviting(false);
     }
@@ -1691,8 +1703,8 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
       }
       toast.success("Formulation duplicated");
       router.push(`/dashboard/formulations/${json.formulation.id}`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to duplicate");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Failed to duplicate"));
     } finally {
       setDuplicating(false);
     }
@@ -1924,7 +1936,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_24px_80px_rgba(0,0,0,0.2)]">
             <h3 className="text-[15px] font-semibold text-gray-950">Delete formulation?</h3>
             <p className="mt-1.5 text-[13px] text-gray-500">
-              "{formulation.name}" will be permanently removed. This cannot be undone.
+              &quot;{formulation.name}&quot; will be permanently removed. This cannot be undone.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button

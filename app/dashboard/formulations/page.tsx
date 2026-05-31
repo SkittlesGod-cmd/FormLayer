@@ -15,6 +15,7 @@ import {
   type FormulationStatus,
 } from "@/lib/formulations/types";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors";
 
 interface Meta {
   count: number;
@@ -98,8 +99,8 @@ export default function FormulationsListPage() {
       }
       toast.success("Formulation duplicated");
       router.push(`/dashboard/formulations/${json.formulation.id}`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to duplicate");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Failed to duplicate"));
     } finally {
       setDuplicating(null);
     }

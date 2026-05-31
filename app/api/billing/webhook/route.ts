@@ -5,6 +5,19 @@ import { EventName } from "@paddle/paddle-node-sdk";
 import { PADDLE_WEBHOOK_SECRET } from "@/lib/billing/paddle";
 import type { PlanId } from "@/lib/billing/plans";
 
+interface PaddleSubscriptionEvent {
+  event_type?: string;
+  data?: {
+    id?: string;
+    customer_id?: string;
+    status?: string;
+    custom_data?: { user_id?: string };
+    items?: Array<{ price?: { id?: string } }>;
+    current_billing_period?: { ends_at?: string | null };
+    scheduled_change?: { action?: string | null };
+  };
+}
+
 // Use service role to bypass RLS — webhook has no user session
 function getServiceClient() {
   return createClient(
@@ -46,7 +59,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let event: any;
+  let event: PaddleSubscriptionEvent;
   try {
     event = JSON.parse(rawBody);
   } catch {
@@ -70,6 +83,7 @@ export async function POST(req: NextRequest) {
     eventType === EventName.SubscriptionTrialing
   ) {
     const sub = event.data;
+    if (!sub) return NextResponse.json({ received: true });
     const userId: string | undefined = sub.custom_data?.user_id;
     if (!userId) return NextResponse.json({ received: true });
 
@@ -90,6 +104,7 @@ export async function POST(req: NextRequest) {
 
   if (eventType === EventName.SubscriptionCanceled) {
     const sub = event.data;
+    if (!sub?.id) return NextResponse.json({ received: true });
     await supabase
       .from("subscriptions")
       .update({ status: "canceled", plan: "free", updated_at: new Date().toISOString() })
@@ -98,6 +113,7 @@ export async function POST(req: NextRequest) {
 
   if (eventType === EventName.SubscriptionPastDue || eventType === EventName.SubscriptionPaused) {
     const sub = event.data;
+    if (!sub?.id) return NextResponse.json({ received: true });
     await supabase
       .from("subscriptions")
       .update({ status: sub.status, updated_at: new Date().toISOString() })

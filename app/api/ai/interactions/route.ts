@@ -3,6 +3,9 @@ import { createClient } from "@/utils/supabase/server";
 import { getAIClient, MODEL_COMPLIANCE as MODEL } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { z } from "zod";
+import { parseJsonObject } from "@/lib/ai/json";
+import { getErrorMessage } from "@/lib/errors";
+import type { FormulationIngredient } from "@/lib/formulations/types";
 
 const bodySchema = z.object({ formulation_id: z.string().uuid() });
 
@@ -44,24 +47,13 @@ Rules:
 - Be specific: cite the mechanism, not just "may interact".
 - If the stack is clean with no significant issues, say so clearly in overall_assessment and return empty arrays.`;
 
-function extractJson(raw: string): any | null {
-  try { return JSON.parse(raw.trim()); } catch {}
-  const start = raw.indexOf("{");
-  if (start === -1) return null;
-  try { return JSON.parse(raw.slice(start)); } catch {}
-  let depth = 0, end = -1, inStr = false, esc = false;
-  for (let i = start; i < raw.length; i++) {
-    const c = raw[i];
-    if (esc) { esc = false; continue; }
-    if (c === "\\" && inStr) { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (c === "{") depth++;
-    else if (c === "}") { depth--; if (depth === 0) { end = i; break; } }
-  }
-  if (end !== -1) { try { return JSON.parse(raw.slice(start, end + 1)); } catch {} }
-  return null;
-}
+const interactionResultSchema = z.object({
+  overall_assessment: z.string().default("Interaction analysis complete."),
+  synergies: z.array(z.record(z.string(), z.unknown())).default([]),
+  antagonisms: z.array(z.record(z.string(), z.unknown())).default([]),
+  timing_recommendations: z.array(z.record(z.string(), z.unknown())).default([]),
+  population_notes: z.string().default(""),
+});
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -88,7 +80,9 @@ export async function POST(req: NextRequest) {
 
   if (!formulation) return NextResponse.json({ error: "Formulation not found" }, { status: 404 });
 
-  const ingredients = Array.isArray(formulation.ingredients) ? formulation.ingredients : [];
+  const ingredients = Array.isArray(formulation.ingredients)
+    ? (formulation.ingredients as FormulationIngredient[])
+    : [];
   if (ingredients.length < 2) {
     return NextResponse.json({
       overall_assessment: "Not enough ingredients to analyze interactions. Add at least 2 ingredients.",
@@ -97,7 +91,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ingredientList = ingredients
-    .map((i: any) => `- ${i.name}: ${i.dose || "?"}${i.unit || "mg"}`)
+    .map((i) => `- ${i.name}: ${i.dose || "?"}${i.unit || "mg"}`)
     .join("\n");
 
   const prompt = `Analyze interactions for this formulation:
@@ -123,14 +117,14 @@ Return ONLY the JSON object.`;
     });
 
     const raw = message.choices[0]?.message?.content ?? "";
-    const result = extractJson(raw);
+    const parsedResult = interactionResultSchema.safeParse(parseJsonObject(raw));
 
-    if (!result) {
+    if (!parsedResult.success) {
       return NextResponse.json({ error: "Could not parse AI response" }, { status: 502 });
     }
 
-    return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "AI request failed" }, { status: 500 });
+    return NextResponse.json(parsedResult.data);
+  } catch (err: unknown) {
+    return NextResponse.json({ error: getErrorMessage(err, "AI request failed") }, { status: 500 });
   }
 }

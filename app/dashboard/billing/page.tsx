@@ -7,6 +7,7 @@ import { initializePaddle, CheckoutEventNames, type Paddle, type PaddleEventData
 import { PLANS, PLAN_ORDER, getPlan, type PlanId } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface BillingState {
   plan: PlanId;
@@ -85,11 +86,11 @@ function BillingPageInner() {
   async function openCheckout(planId: string) {
     const plan = PLANS[planId as PlanId];
     if (!plan?.priceId) {
-      toast.error("Price ID not configured — add PADDLE_STARTER_PRICE_ID / PADDLE_PRO_PRICE_ID to .env.local");
+      toast.error("Checkout unavailable — please contact support@formlayer.co if this persists.");
       return;
     }
     if (!paddleRef.current) {
-      toast.error("Paddle.js not loaded — add NEXT_PUBLIC_PADDLE_CLIENT_TOKEN to .env.local");
+      toast.error("Payment system failed to load. Please refresh and try again.");
       return;
     }
 
@@ -113,8 +114,8 @@ function BillingPageInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       window.open(data.url, "_blank");
-    } catch (e: any) {
-      toast.error(e.message ?? "Could not open billing portal");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Could not open billing portal"));
     } finally {
       setPortalLoading(false);
     }
@@ -166,15 +167,18 @@ function BillingPageInner() {
                 </div>
               </div>
               {state?.plan !== "free" && (
-                <button
-                  type="button"
-                  onClick={openPortal}
-                  disabled={portalLoading}
-                  className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-gray-50 px-4 py-2 text-[12px] font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
-                >
-                  {portalLoading ? <Loader2 className="size-3.5 animate-spin" /> : <ExternalLink className="size-3.5" />}
-                  Manage subscription
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    type="button"
+                    onClick={openPortal}
+                    disabled={portalLoading}
+                    className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-gray-50 px-4 py-2 text-[12px] font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {portalLoading ? <Loader2 className="size-3.5 animate-spin" /> : <ExternalLink className="size-3.5" />}
+                    Manage subscription ↗
+                  </button>
+                  <p className="text-[11px] text-gray-400">Invoices &amp; payment method in portal</p>
+                </div>
               )}
             </div>
 
