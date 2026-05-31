@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/auth-context";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SiteChrome, SiteFooter } from "@/components/shared/SiteChrome";
+import { CookieConsent } from "@/components/shared/CookieConsent";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://formlayer.co";
 
@@ -135,6 +136,7 @@ export default function RootLayout({
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
+        <CookieConsent />
       </body>
     </html>
   );

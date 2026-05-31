@@ -9,6 +9,7 @@ import {
   type ProductType,
   type FormulationStatus,
 } from "@/lib/formulations/types";
+import { OnboardingModal } from "@/components/dashboard/OnboardingModal";
 
 interface Formulation {
   id: string;
@@ -54,6 +55,7 @@ export default function DashboardPage() {
   const [formulations, setFormulations] = useState<Formulation[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, draft: 0, active: 0, compliant: 0, avgCompliance: null as number | null });
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -61,6 +63,14 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       if (user) {
+        // Show onboarding for brand-new users (created within last 5 minutes)
+        const createdAt = user.created_at ? new Date(user.created_at).getTime() : 0;
+        const isNew = Date.now() - createdAt < 5 * 60 * 1000;
+        const alreadyOnboarded = localStorage.getItem("fl_onboarded");
+        if (isNew && !alreadyOnboarded) {
+          setShowOnboarding(true);
+          localStorage.setItem("fl_onboarded", "1");
+        }
         // Parallel: recent 5 for display + all for stats
         const [recentRes, allRes] = await Promise.all([
           supabase
@@ -246,6 +256,7 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </div>
   );
 }

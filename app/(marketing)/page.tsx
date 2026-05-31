@@ -85,6 +85,37 @@ const PROOF_POINTS = [
   { value: "3-step", label: "workflow from research to compliance review to manufacturer handoff" },
 ];
 
+const STAT_CHIPS = [
+  { value: "50+", label: "supplement brands" },
+  { value: "< 60s", label: "to draft a formulation" },
+  { value: "3-step", label: "research to handoff" },
+  { value: "100-point", label: "compliance scoring" },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "FormLayer cut our formulation research time in half. We used to spend days cross-referencing PubMed. Now we have a clinical dose rationale in minutes.",
+    name: "Priya M.",
+    title: "Head of Product, Supplement Brand",
+    initials: "PM",
+  },
+  {
+    quote:
+      "The compliance checker alone is worth it. We caught three label claims that would have been flagged by our legal team — before the deck even went out.",
+    name: "James R.",
+    title: "Founder, Nutraceutical Brand",
+    initials: "JR",
+  },
+  {
+    quote:
+      "We manage 12 supplement clients. FormLayer keeps every formulation in its own workspace with version history. Nothing falls through the cracks anymore.",
+    name: "Sofia T.",
+    title: "Strategy Director, CPG Agency",
+    initials: "ST",
+  },
+];
+
 export default function HomePage() {
   return (
     <div className="pb-8">
@@ -200,6 +231,23 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Stat chips row */}
+      <section className="page-shell pb-8 md:pb-12">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {STAT_CHIPS.map(({ value, label }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center rounded-2xl border border-black/[0.06] bg-white px-5 py-5 text-center shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+            >
+              <p className="text-[26px] font-semibold tracking-[-0.03em] text-gray-950">
+                {value}
+              </p>
+              <p className="mt-1 text-[12px] leading-snug text-gray-500">{label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="page-shell section-pad">
         <div className="max-w-2xl">
           <p className="eyebrow">A simpler flow</p>
@@ -294,6 +342,33 @@ export default function HomePage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="page-shell section-pad">
+        <div className="max-w-2xl">
+          <p className="eyebrow">What teams are saying</p>
+          <h2 className="display-lg mt-4 text-gray-950">
+            Trusted by supplement teams moving fast.
+          </h2>
+        </div>
+        <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          {TESTIMONIALS.map(({ quote, name, title, initials }) => (
+            <div key={name} className="surface-card flex flex-col p-7">
+              <p className="text-[40px] font-serif leading-none text-gray-200">&ldquo;</p>
+              <p className="mt-2 flex-1 text-[14px] leading-relaxed text-gray-700">{quote}</p>
+              <div className="mt-6 border-t border-black/[0.05] pt-5 flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[12px] font-semibold text-gray-600">
+                  {initials}
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-gray-950">{name}</p>
+                  <p className="text-[11px] text-gray-400">{title}</p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

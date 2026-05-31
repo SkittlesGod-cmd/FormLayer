@@ -3,10 +3,39 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV_LINKS = [
-  { label: "Features", href: "/features" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "For agencies", href: "/for-agencies" },
+const FOOTER_COLUMNS = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Features", href: "/features" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "For agencies", href: "/for-agencies" },
+      { label: "Changelog", href: "/changelog" },
+      { label: "Dashboard", href: "/dashboard" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Blog", href: "/blog" },
+      { label: "Security", href: "/security" },
+      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+    ],
+  },
+  {
+    heading: "Account",
+    links: [
+      { label: "Sign in", href: "/sign-in" },
+      { label: "Get started", href: "/sign-up" },
+    ],
+  },
 ];
 
 const LEGAL_LINKS = [
@@ -34,37 +63,25 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div className="flex flex-wrap gap-x-16 gap-y-8">
-            <div>
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">Product</p>
-              <nav className="flex flex-col gap-2">
-                {NAV_LINKS.map(({ label, href }) => (
-                  <Link key={href} href={href} className="text-[13px] text-gray-500 transition-colors hover:text-gray-950">
-                    {label}
-                  </Link>
-                ))}
-                <Link href="/dashboard" className="text-[13px] text-gray-500 transition-colors hover:text-gray-950">
-                  Dashboard
-                </Link>
-              </nav>
-            </div>
-            <div>
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">Legal</p>
-              <nav className="flex flex-col gap-2">
-                {LEGAL_LINKS.map(({ label, href }) => (
-                  <Link key={href} href={href} className="text-[13px] text-gray-500 transition-colors hover:text-gray-950">
-                    {label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-            <div>
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">Account</p>
-              <nav className="flex flex-col gap-2">
-                <Link href="/sign-in" className="text-[13px] text-gray-500 transition-colors hover:text-gray-950">Sign in</Link>
-                <Link href="/sign-up" className="text-[13px] text-gray-500 transition-colors hover:text-gray-950">Get started</Link>
-              </nav>
-            </div>
+          <div className="flex flex-wrap gap-x-12 gap-y-8">
+            {FOOTER_COLUMNS.map(({ heading, links }) => (
+              <div key={heading}>
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+                  {heading}
+                </p>
+                <nav className="flex flex-col gap-2">
+                  {links.map(({ label, href }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className="text-[13px] text-gray-500 transition-colors hover:text-gray-950"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+            ))}
           </div>
         </div>
 
