@@ -14,11 +14,15 @@ import {
   History,
   Link2,
   Loader2,
+  Mail,
   Pencil,
   Plus,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   Trash2,
+  UserPlus,
+  X,
 } from "lucide-react";
 
 import { FormulationForm, type FormulationFormValues } from "@/components/formulations/FormulationForm";
@@ -29,6 +33,7 @@ import {
   STATUS_DOT_CLASSES,
   STATUS_LABELS,
   type Formulation,
+  type FormulationIngredient,
   type FormulationStatus,
 } from "@/lib/formulations/types";
 import { cn } from "@/lib/utils";
@@ -39,6 +44,14 @@ interface FormulationVersionRow {
   id: string;
   version: number;
   snapshot: Formulation;
+  created_at: string;
+}
+
+interface Collaborator {
+  id: string;
+  invited_email: string;
+  role: "viewer" | "editor";
+  user_id: string | null;
   created_at: string;
 }
 
@@ -60,12 +73,13 @@ function relativeDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ─── Compliance result types ──────────────────────────────────────────────────
+// ─── Compliance result types ───────────────────────────────────────────────────
 interface ComplianceIssue {
   severity: "high" | "medium" | "low";
   ingredient: string | null;
   issue: string;
   detail: string;
+  fix?: string;
 }
 interface ComplianceResult {
   score: number;
@@ -77,7 +91,49 @@ interface ComplianceResult {
 }
 
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ formulation }: { formulation: Formulation }) {
+function OverviewTab({
+  formulation,
+  onIngredientRefreshed,
+}: {
+  formulation: Formulation;
+  onIngredientRefreshed: (updated: FormulationIngredient) => void;
+}) {
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+
+  async function refreshIngredient(ing: FormulationIngredient) {
+    setRefreshing(ing.id);
+    try {
+      const res = await fetch("/api/ai/ingredient", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ingredient_id: ing.id, formulation_id: formulation.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed");
+      onIngredientRefreshed(json.ingredient);
+      toast.success(`Updated evidence for ${ing.name}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to refresh");
+    } finally {
+      setRefreshing(null);
+    }
+  }
+
+  const gradeColor = (g: string | undefined) =>
+    g === "A" ? "bg-emerald-100 text-emerald-700" :
+    g === "B" ? "bg-amber-100 text-amber-700" :
+    g === "C" ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-500";
+
+  const doseColor = (d: string | undefined) =>
+    d === "at_studied_dose" ? "text-emerald-600" :
+    d === "below_studied_dose" ? "text-amber-600" :
+    d === "above_studied_dose" ? "text-red-500" : "text-gray-400";
+
+  const doseLabel = (d: string | undefined) =>
+    d === "at_studied_dose" ? "at dose" :
+    d === "below_studied_dose" ? "below dose" :
+    d === "above_studied_dose" ? "above dose" : "—";
+
   return (
     <div className="space-y-4">
       {/* Specs */}
@@ -103,35 +159,61 @@ function OverviewTab({ formulation }: { formulation: Formulation }) {
         </div>
       )}
 
-      {/* Ingredients */}
+      {/* Ingredients with evidence */}
       <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-        <div className="border-b border-black/[0.05] px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-black/[0.05] px-5 py-3.5">
           <h2 className="text-[13px] font-semibold text-gray-900">
             Ingredients
             <span className="ml-2 font-mono text-[11px] text-gray-400">
               {formulation.ingredients.length}
             </span>
           </h2>
+          <p className="text-[11px] text-gray-400">Click <Sparkles className="inline size-3 text-brand" /> to refresh evidence</p>
         </div>
         {formulation.ingredients.length === 0 ? (
           <p className="px-5 py-10 text-center text-[13px] text-gray-400">No ingredients yet.</p>
         ) : (
-          <div>
-            <div className="grid grid-cols-[1fr_auto] border-b border-black/[0.05] px-5 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Ingredient</span>
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Dose</span>
-            </div>
-            <ul className="divide-y divide-black/[0.04]">
-              {formulation.ingredients.map((ing) => (
-                <li key={ing.id} className="grid grid-cols-[1fr_auto] items-center px-5 py-3">
-                  <p className="text-[13px] font-medium text-gray-900">{ing.name || "—"}</p>
-                  <p className="font-mono text-[12px] text-gray-500">
-                    {ing.dose ? `${ing.dose}${ing.unit ? ` ${ing.unit}` : ""}` : "—"}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ul className="divide-y divide-black/[0.04]">
+            {formulation.ingredients.map((ing) => (
+              <li key={ing.id} className="px-5 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {ing.evidence_grade && (
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", gradeColor(ing.evidence_grade))}>
+                        {ing.evidence_grade}
+                      </span>
+                    )}
+                    <p className="text-[13px] font-medium text-gray-900">{ing.name || "—"}</p>
+                    <p className="font-mono text-[12px] text-gray-400">
+                      {ing.dose ? `${ing.dose}${ing.unit ? ` ${ing.unit}` : ""}` : "—"}
+                    </p>
+                    {ing.dose_assessment && (
+                      <span className={cn("text-[11px] font-medium", doseColor(ing.dose_assessment))}>
+                        {doseLabel(ing.dose_assessment)}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => refreshIngredient(ing)}
+                    disabled={refreshing === ing.id}
+                    title="Refresh AI evidence"
+                    className="shrink-0 flex size-7 items-center justify-center rounded-md border border-transparent text-gray-300 transition hover:border-brand/20 hover:bg-brand/[0.05] hover:text-brand disabled:opacity-40"
+                  >
+                    {refreshing === ing.id
+                      ? <Loader2 className="size-3.5 animate-spin" />
+                      : <Sparkles className="size-3.5" />}
+                  </button>
+                </div>
+                {ing.clinical_dose_range && (
+                  <p className="mt-1 text-[11px] text-gray-400">Clinical range: {ing.clinical_dose_range}</p>
+                )}
+                {ing.rationale && (
+                  <p className="mt-1 text-[12px] leading-relaxed text-gray-500">{ing.rationale}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -263,12 +345,6 @@ function ResearchTab({ formulation }: { formulation: Formulation }) {
         {error ? (
           <div className="rounded-lg border border-red-100 bg-red-50 p-4">
             <p className="text-[12px] text-red-600">{error}</p>
-            {error.includes("ANTHROPIC_API_KEY") && (
-              <p className="mt-1 text-[11px] text-red-400">
-                Add <code className="rounded bg-red-100 px-1 font-mono">ANTHROPIC_API_KEY=sk-ant-…</code> to{" "}
-                <code className="rounded bg-red-100 px-1 font-mono">.env.local</code>
-              </p>
-            )}
           </div>
         ) : (
           <>
@@ -287,10 +363,19 @@ function ResearchTab({ formulation }: { formulation: Formulation }) {
 }
 
 // ─── Compliance Tab ────────────────────────────────────────────────────────────
-function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulation; onScoreUpdate: (score: number) => void }) {
+function ComplianceTab({
+  formulation,
+  onScoreUpdate,
+  onFormulationUpdate,
+}: {
+  formulation: Formulation;
+  onScoreUpdate: (score: number) => void;
+  onFormulationUpdate: (updated: Formulation) => void;
+}) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ComplianceResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [applyingFix, setApplyingFix] = useState<number | null>(null);
 
   async function runCheck() {
     setLoading(true);
@@ -309,6 +394,45 @@ function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulatio
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function applyFix(issue: ComplianceIssue, idx: number) {
+    if (!issue.fix) return;
+    setApplyingFix(idx);
+    try {
+      // Auto-fix: if a specific ingredient is named, update its notes to reflect the fix
+      // Otherwise, append the fix recommendation to the formulation's notes
+      let updatedNotes = formulation.notes ?? "";
+      const fixNote = `[Compliance fix] ${issue.issue}: ${issue.fix}`;
+      updatedNotes = updatedNotes ? `${updatedNotes}\n\n${fixNote}` : fixNote;
+
+      // If the fix references a specific ingredient, also update that ingredient's notes
+      let updatedIngredients = formulation.ingredients;
+      if (issue.ingredient) {
+        updatedIngredients = formulation.ingredients.map(ing =>
+          ing.name.toLowerCase().includes(issue.ingredient!.toLowerCase())
+            ? { ...ing, notes: ing.notes ? `${ing.notes}; ${issue.fix}` : issue.fix }
+            : ing
+        );
+      }
+
+      const res = await fetch(`/api/formulations/${formulation.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: updatedNotes, ingredients: updatedIngredients }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to apply fix");
+      onFormulationUpdate(json.formulation);
+      toast.success("Fix applied to formulation");
+
+      // Remove fixed issue from result
+      setResult(r => r ? { ...r, issues: r.issues.filter((_, i) => i !== idx) } : r);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to apply fix");
+    } finally {
+      setApplyingFix(null);
     }
   }
 
@@ -391,7 +515,7 @@ function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulatio
             </div>
           </div>
 
-          {/* Issues */}
+          {/* Issues with auto-fix */}
           {result.issues.length > 0 && (
             <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
               <div className="border-b border-black/[0.05] px-5 py-3.5">
@@ -399,6 +523,7 @@ function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulatio
                   Issues
                   <span className="ml-2 font-mono text-[11px] text-gray-400">{result.issues.length}</span>
                 </h2>
+                <p className="mt-0.5 text-[11px] text-gray-400">Click "Apply fix" to automatically patch the formulation notes.</p>
               </div>
               <ul className="divide-y divide-black/[0.04] p-2">
                 {result.issues.map((issue, i) => (
@@ -407,12 +532,28 @@ function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulatio
                       <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0 mt-0.5", severityColor(issue.severity))}>
                         {issue.severity}
                       </span>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-semibold text-gray-900">{issue.issue}</p>
                         {issue.ingredient && (
                           <p className="mt-0.5 text-[11px] text-brand">{issue.ingredient}</p>
                         )}
                         <p className="mt-1 text-[12px] leading-relaxed text-gray-500">{issue.detail}</p>
+                        {issue.fix && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1 flex-1">
+                              Fix: {issue.fix}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => applyFix(issue, i)}
+                              disabled={applyingFix === i}
+                              className="shrink-0 flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              {applyingFix === i ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                              Apply fix
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </li>
@@ -481,13 +622,7 @@ function ComplianceTab({ formulation, onScoreUpdate }: { formulation: Formulatio
 
 // ─── Handoff Tab ──────────────────────────────────────────────────────────────
 const CERTIFICATIONS = ["cGMP", "NSF Certified", "Informed Sport", "Kosher", "Halal", "Organic"];
-const TIMELINES = [
-  "ASAP (< 4 weeks)",
-  "3 months",
-  "6 months",
-  "12 months",
-  "Flexible",
-];
+const TIMELINES = ["ASAP (< 4 weeks)", "3 months", "6 months", "12 months", "Flexible"];
 
 interface RFQState {
   moq: string;
@@ -500,14 +635,9 @@ interface RFQState {
 
 function HandoffTab({ formulation }: { formulation: Formulation }) {
   const [rfq, setRfq] = useState<RFQState>({
-    moq: "",
-    targetCost: "",
-    timeline: TIMELINES[1],
-    certifications: [],
-    packaging: "",
-    requirements: "",
+    moq: "", targetCost: "", timeline: TIMELINES[1],
+    certifications: [], packaging: "", requirements: "",
   });
-
   const [streaming, setStreaming] = useState(false);
   const [brief, setBrief] = useState("");
   const [briefError, setBriefError] = useState<string | null>(null);
@@ -518,6 +648,24 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Collaborators state
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [collabLoading, setCollabLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/formulations/${formulation.id}/collaborators`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled && j.collaborators) setCollaborators(j.collaborators); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCollabLoading(false); });
+    return () => { cancelled = true; };
+  }, [formulation.id]);
 
   function toggleCert(cert: string) {
     setRfq(r => ({
@@ -616,11 +764,131 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
     });
   }
 
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      const res = await fetch(`/api/formulations/${formulation.id}/collaborators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to invite");
+      setCollaborators(c => {
+        const exists = c.find(x => x.invited_email === json.collaborator.invited_email);
+        if (exists) return c.map(x => x.invited_email === json.collaborator.invited_email ? json.collaborator : x);
+        return [...c, json.collaborator];
+      });
+      setInviteEmail("");
+      toast.success(`Invited ${json.collaborator.invited_email}`);
+    } catch (e: any) {
+      setInviteError(e.message ?? "Failed to invite");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function removeCollaborator(email: string) {
+    try {
+      await fetch(`/api/formulations/${formulation.id}/collaborators?email=${encodeURIComponent(email)}`, {
+        method: "DELETE",
+      });
+      setCollaborators(c => c.filter(x => x.invited_email !== email));
+      toast.success("Collaborator removed");
+    } catch {
+      toast.error("Failed to remove collaborator");
+    }
+  }
+
   const inputClass = "h-9 rounded-lg border border-black/[0.08] bg-white px-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15";
   const labelClass = "text-[11px] font-semibold uppercase tracking-widest text-gray-400";
 
   return (
     <div className="space-y-4">
+      {/* Structured brief summary */}
+      <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+        <div className="border-b border-black/[0.05] px-5 py-3.5">
+          <h2 className="text-[13px] font-semibold text-gray-900">Formulation Summary</h2>
+          <p className="mt-0.5 text-[11px] text-gray-400">Structured spec sheet for manufacturer outreach.</p>
+        </div>
+        <div className="p-5">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <p className={labelClass}>Product name</p>
+              <p className="mt-1 text-[13px] font-medium text-gray-900">{formulation.name}</p>
+            </div>
+            {formulation.product_type && (
+              <div>
+                <p className={labelClass}>Format</p>
+                <p className="mt-1 text-[13px] text-gray-700 capitalize">{formulation.product_type}</p>
+              </div>
+            )}
+            {formulation.serving_size && (
+              <div>
+                <p className={labelClass}>Serving size</p>
+                <p className="mt-1 text-[13px] text-gray-700">{formulation.serving_size}</p>
+              </div>
+            )}
+            {formulation.target_dose && (
+              <div>
+                <p className={labelClass}>Total actives / serving</p>
+                <p className="mt-1 text-[13px] text-gray-700">{formulation.target_dose}</p>
+              </div>
+            )}
+            {formulation.compliance_score != null && (
+              <div>
+                <p className={labelClass}>Compliance score</p>
+                <p className={cn("mt-1 text-[13px] font-semibold", formulation.compliance_score >= 90 ? "text-emerald-600" : formulation.compliance_score >= 70 ? "text-amber-600" : "text-red-600")}>
+                  {formulation.compliance_score}/100
+                </p>
+              </div>
+            )}
+          </div>
+
+          {formulation.ingredients.length > 0 && (
+            <div className="mt-5">
+              <p className={cn(labelClass, "mb-3")}>Ingredient stack ({formulation.ingredients.length})</p>
+              <div className="overflow-hidden rounded-lg border border-black/[0.06]">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-black/[0.05] bg-gray-50">
+                      <th className="px-4 py-2 text-left font-semibold uppercase tracking-widest text-gray-400 text-[10px]">Ingredient</th>
+                      <th className="px-4 py-2 text-right font-semibold uppercase tracking-widest text-gray-400 text-[10px]">Dose</th>
+                      <th className="hidden px-4 py-2 text-center font-semibold uppercase tracking-widest text-gray-400 text-[10px] sm:table-cell">Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/[0.04]">
+                    {formulation.ingredients.map(ing => (
+                      <tr key={ing.id}>
+                        <td className="px-4 py-2.5 text-gray-900">{ing.name}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-500">
+                          {ing.dose ? `${ing.dose} ${ing.unit ?? "mg"}` : "—"}
+                        </td>
+                        <td className="hidden px-4 py-2.5 text-center sm:table-cell">
+                          {ing.evidence_grade ? (
+                            <span className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                              ing.evidence_grade === "A" ? "bg-emerald-100 text-emerald-700" :
+                              ing.evidence_grade === "B" ? "bg-amber-100 text-amber-700" :
+                              "bg-red-100 text-red-600"
+                            )}>
+                              {ing.evidence_grade}
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* RFQ */}
       <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
         <div className="border-b border-black/[0.05] px-5 py-3.5">
@@ -630,43 +898,21 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
         <div className="grid gap-4 p-5 md:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>MOQ</label>
-            <input
-              type="text"
-              value={rfq.moq}
-              onChange={e => setRfq(r => ({ ...r, moq: e.target.value }))}
-              placeholder="e.g. 1,000 units"
-              className={inputClass}
-            />
+            <input type="text" value={rfq.moq} onChange={e => setRfq(r => ({ ...r, moq: e.target.value }))} placeholder="e.g. 1,000 units" className={inputClass} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>Target cost / unit</label>
-            <input
-              type="text"
-              value={rfq.targetCost}
-              onChange={e => setRfq(r => ({ ...r, targetCost: e.target.value }))}
-              placeholder="e.g. $2.50/unit"
-              className={inputClass}
-            />
+            <input type="text" value={rfq.targetCost} onChange={e => setRfq(r => ({ ...r, targetCost: e.target.value }))} placeholder="e.g. $2.50/unit" className={inputClass} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>Timeline</label>
-            <select
-              value={rfq.timeline}
-              onChange={e => setRfq(r => ({ ...r, timeline: e.target.value }))}
-              className={inputClass}
-            >
+            <select value={rfq.timeline} onChange={e => setRfq(r => ({ ...r, timeline: e.target.value }))} className={inputClass}>
               {TIMELINES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>Packaging format</label>
-            <input
-              type="text"
-              value={rfq.packaging}
-              onChange={e => setRfq(r => ({ ...r, packaging: e.target.value }))}
-              placeholder="e.g. 60-count HDPE bottle"
-              className={inputClass}
-            />
+            <input type="text" value={rfq.packaging} onChange={e => setRfq(r => ({ ...r, packaging: e.target.value }))} placeholder="e.g. 60-count HDPE bottle" className={inputClass} />
           </div>
           <div className="md:col-span-2 flex flex-col gap-1.5">
             <label className={labelClass}>Certifications needed</label>
@@ -674,17 +920,10 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
               {CERTIFICATIONS.map(c => {
                 const on = rfq.certifications.includes(c);
                 return (
-                  <button
-                    type="button"
-                    key={c}
-                    onClick={() => toggleCert(c)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-[11px] font-medium transition",
-                      on
-                        ? "border-brand bg-brand/[0.08] text-brand"
-                        : "border-black/[0.08] bg-white text-gray-500 hover:border-black/20 hover:text-gray-900"
-                    )}
-                  >
+                  <button type="button" key={c} onClick={() => toggleCert(c)}
+                    className={cn("rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                      on ? "border-brand bg-brand/[0.08] text-brand" : "border-black/[0.08] bg-white text-gray-500 hover:border-black/20 hover:text-gray-900"
+                    )}>
                     {on && <Check className="mr-1 inline size-3" />}
                     {c}
                   </button>
@@ -694,13 +933,9 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
           </div>
           <div className="md:col-span-2 flex flex-col gap-1.5">
             <label className={labelClass}>Special requirements</label>
-            <textarea
-              value={rfq.requirements}
-              onChange={e => setRfq(r => ({ ...r, requirements: e.target.value }))}
-              rows={3}
+            <textarea value={rfq.requirements} onChange={e => setRfq(r => ({ ...r, requirements: e.target.value }))} rows={3}
               placeholder="e.g. Vegan capsule, no titanium dioxide, custom blend label…"
-              className="w-full resize-none rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
-            />
+              className="w-full resize-none rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15" />
           </div>
         </div>
       </div>
@@ -712,7 +947,7 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
             <div className="flex size-7 items-center justify-center rounded-lg bg-brand/10">
               <Factory className="size-3.5 text-brand" />
             </div>
-            <p className="text-[13px] font-semibold text-gray-900">Manufacturer Brief</p>
+            <p className="text-[13px] font-semibold text-gray-900">AI Manufacturer Brief</p>
             {streaming && (
               <span className="flex items-center gap-1 text-[11px] text-brand">
                 <span className="size-1.5 animate-pulse rounded-full bg-brand" />
@@ -733,10 +968,8 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
               <p className="text-[12px] leading-relaxed text-gray-500 max-w-sm mx-auto">
                 Generate a manufacturer-ready brief combining your formulation, ingredient details, and RFQ requirements.
               </p>
-              <button
-                onClick={generateBrief}
-                className="mt-4 mx-auto flex items-center gap-1.5 rounded-lg bg-gray-950 px-5 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800"
-              >
+              <button onClick={generateBrief}
+                className="mt-4 mx-auto flex items-center gap-1.5 rounded-lg bg-gray-950 px-5 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800">
                 <FileText className="size-3.5" />
                 Generate manufacturer brief
               </button>
@@ -770,26 +1003,17 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
         </div>
         <div className="p-5">
           {!shareToken ? (
-            <button
-              onClick={generateShareLink}
-              disabled={shareLoading}
-              className="flex items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
-            >
+            <button onClick={generateShareLink} disabled={shareLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-50">
               {shareLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
               Generate share link
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={shareUrl}
-                readOnly
-                className="h-9 flex-1 rounded-lg border border-black/[0.08] bg-gray-50 px-3 font-mono text-[12px] text-gray-700 outline-none"
-              />
-              <button
-                onClick={copyShare}
-                className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-medium text-gray-700 transition hover:border-black/20 hover:bg-black/[0.02]"
-              >
+              <input type="text" value={shareUrl} readOnly
+                className="h-9 flex-1 rounded-lg border border-black/[0.08] bg-gray-50 px-3 font-mono text-[12px] text-gray-700 outline-none" />
+              <button onClick={copyShare}
+                className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-medium text-gray-700 transition hover:border-black/20 hover:bg-black/[0.02]">
                 {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </button>
@@ -798,11 +1022,82 @@ function HandoffTab({ formulation }: { formulation: Formulation }) {
           {shareError && <p className="mt-2 text-[11px] text-red-500">{shareError}</p>}
         </div>
       </div>
+
+      {/* Collaborators */}
+      <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+        <div className="border-b border-black/[0.05] px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-brand/10">
+              <UserPlus className="size-3.5 text-brand" />
+            </div>
+            <p className="text-[13px] font-semibold text-gray-900">Team Collaborators</p>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-400">Invite team members to view or edit this formulation.</p>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Invite form */}
+          <form onSubmit={handleInvite} className="flex gap-2 flex-wrap">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              placeholder="colleague@company.com"
+              className="h-9 flex-1 min-w-48 rounded-lg border border-black/[0.08] bg-white px-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
+            />
+            <select
+              value={inviteRole}
+              onChange={e => setInviteRole(e.target.value as "editor" | "viewer")}
+              className="h-9 rounded-lg border border-black/[0.08] bg-white px-3 text-[13px] outline-none"
+            >
+              <option value="editor">Can edit</option>
+              <option value="viewer">Can view</option>
+            </select>
+            <button type="submit" disabled={inviting || !inviteEmail.trim()}
+              className="flex items-center gap-1.5 rounded-lg bg-gray-950 px-4 py-2 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-50">
+              {inviting ? <Loader2 className="size-3.5 animate-spin" /> : <Mail className="size-3.5" />}
+              Invite
+            </button>
+          </form>
+          {inviteError && <p className="text-[12px] text-red-500">{inviteError}</p>}
+
+          {/* Collaborators list */}
+          {collabLoading ? (
+            <p className="text-[12px] text-gray-400">Loading…</p>
+          ) : collaborators.length === 0 ? (
+            <p className="text-[12px] text-gray-400">No collaborators yet. Invite your team above.</p>
+          ) : (
+            <ul className="divide-y divide-black/[0.04] rounded-lg border border-black/[0.06]">
+              {collaborators.map(c => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-7 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600">
+                      {c.invited_email[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-medium text-gray-900">{c.invited_email}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {c.user_id ? "Active" : "Invite pending"} · {c.role === "editor" ? "Can edit" : "Can view"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCollaborator(c.invited_email)}
+                    className="flex size-7 items-center justify-center rounded-md text-gray-300 hover:bg-red-50 hover:text-red-500 transition"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ─── Version History ──────────────────────────────────────────────────────────
+// ─── Version History ───────────────────────────────────────────────────────────
 function VersionHistory({
   formulationId,
   onRestore,
@@ -820,11 +1115,8 @@ function VersionHistory({
         const res = await fetch(`/api/formulations/${formulationId}/versions`, { cache: "no-store" });
         const json = await res.json();
         if (!cancelled && Array.isArray(json.versions)) setVersions(json.versions);
-      } catch {
-        // ignore
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      } catch {}
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
   }, [formulationId]);
@@ -868,7 +1160,7 @@ function VersionHistory({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function FormulationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -880,6 +1172,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
   const [statusBusy, setStatusBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [editFormKey, setEditFormKey] = useState(0);
   const [editOverrides, setEditOverrides] = useState<Partial<FormulationFormValues> | null>(null);
 
@@ -892,7 +1185,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
         const res = await fetch(`/api/formulations/${id}`, { cache: "no-store" });
         if (res.status === 404) { if (!cancelled) setError("Formulation not found"); return; }
         if (!res.ok) throw new Error("Failed to load");
-        const json = (await res.json()) as { formulation: Formulation };
+        const json = await res.json() as { formulation: Formulation };
         if (!cancelled) setFormulation(json.formulation);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Something went wrong");
@@ -914,7 +1207,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error ?? "Failed to update");
     }
-    const json = (await res.json()) as { formulation: Formulation };
+    const json = await res.json() as { formulation: Formulation };
     setFormulation(json.formulation);
     setTab("overview");
     toast.success("Formulation updated");
@@ -930,10 +1223,10 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
         body: JSON.stringify({ status: next }),
       });
       if (!res.ok) throw new Error("Failed");
-      const json = (await res.json()) as { formulation: Formulation };
+      const json = await res.json() as { formulation: Formulation };
       setFormulation(json.formulation);
       toast.success(`Moved to ${STATUS_LABELS[next]}`);
-    } catch (e) {
+    } catch {
       toast.error("Failed to update status");
     } finally {
       setStatusBusy(false);
@@ -948,10 +1241,29 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
       toast.success("Formulation deleted");
       router.push("/dashboard/formulations");
       router.refresh();
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete");
       setDeleting(false);
       setConfirmDelete(false);
+    }
+  }
+
+  async function handleDuplicate() {
+    setDuplicating(true);
+    try {
+      const res = await fetch(`/api/formulations/${id}/duplicate`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.limit) toast.error("Formulation limit reached. Upgrade your plan.");
+        else throw new Error(json.error ?? "Failed to duplicate");
+        return;
+      }
+      toast.success("Formulation duplicated");
+      router.push(`/dashboard/formulations/${json.formulation.id}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to duplicate");
+    } finally {
+      setDuplicating(false);
     }
   }
 
@@ -972,7 +1284,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
       formulation.capsules_per_serving != null ? `Capsules per serving: ${formulation.capsules_per_serving}` : "",
       "",
       "## Ingredient Stack",
-      ...formulation.ingredients.map(i => `- ${i.name}: ${i.dose || "?"}${i.unit || " mg"}`),
+      ...formulation.ingredients.map(i => `- ${i.name}: ${i.dose || "?"}${i.unit || " mg"}${i.evidence_grade ? ` (Grade ${i.evidence_grade})` : ""}`),
       "",
       formulation.notes ? `## Notes\n${formulation.notes}` : "",
     ].filter(l => l !== undefined).join("\n").trim();
@@ -1034,7 +1346,7 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
             {formulation.compliance_score != null && ` · Compliance ${formulation.compliance_score}/100`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/dashboard/formulations/${id}/print`}
             className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-medium text-gray-700 transition hover:border-black/20 hover:bg-black/[0.02]"
@@ -1048,6 +1360,14 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
           >
             <Download className="size-3.5" />
             Export
+          </button>
+          <button
+            onClick={handleDuplicate}
+            disabled={duplicating}
+            className="flex items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-medium text-gray-700 transition hover:border-black/20 hover:bg-black/[0.02] disabled:opacity-50"
+          >
+            {duplicating ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
+            Duplicate
           </button>
           <button
             onClick={() => setConfirmDelete(true)}
@@ -1101,12 +1421,23 @@ export default function FormulationDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Tab content */}
-      {tab === "overview" && <OverviewTab formulation={formulation} />}
+      {tab === "overview" && (
+        <OverviewTab
+          formulation={formulation}
+          onIngredientRefreshed={updated =>
+            setFormulation(f => f
+              ? { ...f, ingredients: f.ingredients.map(i => i.id === updated.id ? updated : i) }
+              : f
+            )
+          }
+        />
+      )}
       {tab === "research" && <ResearchTab formulation={formulation} />}
       {tab === "compliance" && (
         <ComplianceTab
           formulation={formulation}
           onScoreUpdate={score => setFormulation(f => f ? { ...f, compliance_score: score } : f)}
+          onFormulationUpdate={updated => setFormulation(updated)}
         />
       )}
       {tab === "handoff" && <HandoffTab formulation={formulation} />}

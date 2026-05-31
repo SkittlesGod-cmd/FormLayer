@@ -7,7 +7,7 @@ import {
   createFormulationSchema,
 } from "@/lib/formulations/types";
 import { getUserSubscription, getFormulationCount } from "@/lib/billing/subscription";
-import { canCreateFormulation } from "@/lib/billing/plans";
+import { canCreateFormulation, getPlan } from "@/lib/billing/plans";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -43,16 +43,29 @@ export async function GET(request: NextRequest) {
     query = query.eq("status", status);
   }
 
-  const { data, error } = await query;
+  const [queryResult, sub, count] = await Promise.all([
+    query,
+    getUserSubscription(user.id),
+    getFormulationCount(user.id),
+  ]);
 
-  if (error) {
+  if (queryResult.error) {
     return NextResponse.json(
-      { error: "Failed to fetch formulations", details: error.message },
+      { error: "Failed to fetch formulations", details: queryResult.error.message },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ formulations: data ?? [] });
+  const plan = getPlan(sub.plan);
+  return NextResponse.json({
+    formulations: queryResult.data ?? [],
+    meta: {
+      count,
+      limit: plan.formulationLimit,
+      plan: sub.plan,
+      canCreate: canCreateFormulation(sub.plan, count),
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {

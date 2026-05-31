@@ -33,11 +33,28 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
     );
   }
 
+  // If not owner, check collaborator access
   if (!data) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const { data: collab } = await supabase
+      .from("formulation_collaborators")
+      .select("role")
+      .eq("formulation_id", id)
+      .eq("invited_email", user.email ?? "")
+      .maybeSingle();
+
+    if (!collab) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const { data: shared } = await supabase
+      .from("formulations")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!shared) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ formulation: shared, role: collab.role });
   }
 
-  return NextResponse.json({ formulation: data });
+  return NextResponse.json({ formulation: data, role: "owner" });
 }
 
 export async function PUT(request: NextRequest, { params }: RouteContext) {

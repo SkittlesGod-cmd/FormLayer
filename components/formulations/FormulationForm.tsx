@@ -3,7 +3,25 @@
 import { useState } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, Sparkles, Loader2, X, Info } from "lucide-react";
+import { GripVertical, Plus, Trash2, Sparkles, Loader2, X, Info } from "lucide-react";
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +74,92 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 
 const UNIT_OPTIONS = ["mg", "mcg", "g", "IU", "CFU", "mL", "%DV", "mg NE", "mg ATE"];
 
+// ── Sortable ingredient row ────────────────────────────────────────────────────
+interface SortableIngredientRowProps {
+  fieldId: string;
+  idx: number;
+  register: ReturnType<typeof useForm<FormulationFormValues>>["register"];
+  control: ReturnType<typeof useForm<FormulationFormValues>>["control"];
+  onRemove: () => void;
+}
+
+function SortableIngredientRow({ fieldId, idx, register, control, onRemove }: SortableIngredientRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: fieldId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="grid grid-cols-12 items-center gap-2 rounded-lg border border-black/[0.06] bg-gray-50/50 p-2.5"
+    >
+      <div className="col-span-1 flex justify-center">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none rounded p-1 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="size-4" />
+        </button>
+      </div>
+      <Controller
+        control={control}
+        name={`ingredients.${idx}.id`}
+        render={({ field: f }) => <input type="hidden" {...f} value={f.value ?? ""} />}
+      />
+      <div className="col-span-11 md:col-span-5">
+        <Input
+          {...register(`ingredients.${idx}.name`)}
+          placeholder="e.g. L-Theanine, Ashwagandha KSM-66®"
+          className={cn(fieldClass, "h-8")}
+        />
+      </div>
+      <div className="col-span-5 md:col-span-2">
+        <Input
+          {...register(`ingredients.${idx}.dose`)}
+          placeholder="200"
+          className={cn(fieldClass, "h-8")}
+        />
+      </div>
+      <div className="col-span-5 md:col-span-2">
+        <select
+          {...register(`ingredients.${idx}.unit`)}
+          className={cn(fieldClass, "h-8")}
+        >
+          {UNIT_OPTIONS.map(u => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
+      </div>
+      <div className="col-span-2 md:col-span-2 flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove"
+          className="flex size-8 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function FormulationForm({ defaultValues, submitLabel, showStatus = false, onSubmit, onCancel }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -63,7 +167,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState<string | null>(null);
 
-  const { register, handleSubmit, control, watch, formState: { errors } } = useForm<FormulationFormValues>({
+  const { register, handleSubmit, control, watch, formState: { errors }, setValue, getValues } = useForm<FormulationFormValues>({
     resolver: zodResolver(createFormulationSchema) as any,
     defaultValues: {
       name: "", description: "", product_type: null, status: "draft",
@@ -73,7 +177,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "ingredients" });
+  const { fields, append, remove, move } = useFieldArray({ control, name: "ingredients" });
   const watchedIngredients = watch("ingredients");
   const watchedProductType = watch("product_type") as ProductType | null | undefined;
 
@@ -84,6 +188,19 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
   const servingPlaceholder = watchedProductType
     ? PRODUCT_TYPE_SERVING[watchedProductType as ProductType] ?? "e.g. 2 capsules"
     : "e.g. 2 capsules";
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = fields.findIndex(f => f.id === active.id);
+    const newIdx = fields.findIndex(f => f.id === over.id);
+    if (oldIdx !== -1 && newIdx !== -1) move(oldIdx, newIdx);
+  }
 
   async function runSuggest() {
     if (!suggestGoal.trim() || suggesting) return;
@@ -119,7 +236,6 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
   return (
     <form onSubmit={internalSubmit} className="space-y-5">
 
-      {/* Product type badge (read-only display if set from wizard) */}
       {watchedProductType && (
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-brand/20 bg-brand/[0.05] px-3 py-1 text-[12px] font-medium text-brand">
@@ -265,29 +381,16 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
           {watchedProductType === "tablet" && (
             <div className="md:col-span-2">
               <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-4 py-3 text-[12px] text-amber-700">
-                Tablet specs (compression force, hardness, disintegration time) are managed in the manufacturing dossier. Record your total tablet weight in "Total active dose" above.
+                Tablet specs are managed in the manufacturing dossier. Record your total tablet weight in "Total active dose" above.
               </div>
             </div>
           )}
 
-          {(watchedProductType === "gummy") && (
+          {watchedProductType === "gummy" && (
             <div className="md:col-span-2">
               <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 text-[12px] text-blue-700">
-                Gummy specs (pectin vs gelatin, sugar content, moisture) are handled in the manufacturing spec sheet. Use "Serving size" for gummies per serving and "Total active dose" for total actives.
+                Gummy specs (pectin vs gelatin, sugar content, moisture) are handled in the manufacturing spec sheet.
               </div>
-            </div>
-          )}
-
-          {(watchedProductType === "powder") && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="target_dose" className={labelClass}>Scoop / sachet weight</Label>
-              <Input
-                id="serving_size"
-                {...register("serving_size")}
-                placeholder="e.g. 5g per scoop"
-                className={fieldClass}
-              />
-              <FieldHint>Total powder weight per serving including excipients and flavors.</FieldHint>
             </div>
           )}
         </div>
@@ -298,7 +401,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
         <div className="flex items-center justify-between border-b border-black/[0.05] px-5 py-3.5">
           <div>
             <h2 className="text-[13px] font-semibold text-gray-900">Active ingredients</h2>
-            <p className="text-[11px] text-gray-400">Each compound, its dose, and unit — as they appear in the Supplement Facts panel.</p>
+            <p className="text-[11px] text-gray-400">Drag to reorder. Each compound, dose, and unit as in the Supplement Facts panel.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -379,55 +482,31 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
             <div className="space-y-2">
               {/* Column headers */}
               <div className="grid grid-cols-12 gap-2 px-1">
-                <span className="col-span-12 text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-5">Ingredient / compound</span>
-                <span className="col-span-5 text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-3">Dose per serving</span>
-                <span className="col-span-5 text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-3">Unit</span>
+                <span className="col-span-1" />
+                <span className="col-span-11 text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-5">Ingredient / compound</span>
+                <span className="hidden text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-2 md:block">Dose</span>
+                <span className="hidden text-[11px] font-semibold uppercase tracking-widest text-gray-400 md:col-span-2 md:block">Unit</span>
               </div>
-              {fields.map((field, idx) => (
-                <div key={field.id} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-black/[0.06] bg-gray-50/50 p-2.5">
-                  <Controller
-                    control={control}
-                    name={`ingredients.${idx}.id`}
-                    render={({ field: f }) => <input type="hidden" {...f} value={f.value ?? ""} />}
-                  />
-                  <div className="col-span-12 md:col-span-5">
-                    <Input
-                      {...register(`ingredients.${idx}.name`)}
-                      placeholder="e.g. L-Theanine, Ashwagandha KSM-66®"
-                      className={cn(fieldClass, "h-8")}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                  {fields.map((field, idx) => (
+                    <SortableIngredientRow
+                      key={field.id}
+                      fieldId={field.id}
+                      idx={idx}
+                      register={register}
+                      control={control}
+                      onRemove={() => remove(idx)}
                     />
-                  </div>
-                  <div className="col-span-5 md:col-span-3">
-                    <Input
-                      {...register(`ingredients.${idx}.dose`)}
-                      placeholder="200"
-                      className={cn(fieldClass, "h-8")}
-                    />
-                  </div>
-                  <div className="col-span-5 md:col-span-3">
-                    <select
-                      {...register(`ingredients.${idx}.unit`)}
-                      className={cn(fieldClass, "h-8")}
-                    >
-                      {UNIT_OPTIONS.map(u => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-2 md:col-span-1 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => remove(idx)}
-                      aria-label="Remove"
-                      className="flex size-8 items-center justify-center rounded-md text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ))}
+                </SortableContext>
+              </DndContext>
               <p className="pt-1 text-[11px] text-gray-400">
-                {fields.length} ingredient{fields.length !== 1 ? "s" : ""} — list all actives exactly as they will appear in the Supplement Facts panel, including proprietary blends by name.
+                {fields.length} ingredient{fields.length !== 1 ? "s" : ""} — list all actives exactly as they will appear in the Supplement Facts panel.
               </p>
             </div>
           )}
@@ -444,7 +523,7 @@ export function FormulationForm({ defaultValues, submitLabel, showStatus = false
           <textarea
             {...register("notes")}
             rows={4}
-            placeholder="e.g. Prefer KSM-66® ashwagandha from Ixoreal. Target MSRP $49.99. Considering 'promotes calm focus' as primary claim. Need to verify magnesium glycinate vs threonate dosing…"
+            placeholder="e.g. Prefer KSM-66® ashwagandha from Ixoreal. Target MSRP $49.99. Considering 'promotes calm focus' as primary claim…"
             className="w-full rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15 resize-none"
           />
         </div>
