@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { collaboratorInviteEmail } from "@/lib/email/templates";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -82,6 +84,21 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Send invite email — non-blocking
+  const resend = getResend();
+  if (resend) {
+    const inviterName = user.user_metadata?.full_name || user.user_metadata?.name || user.email || "Someone";
+    const origin = process.env.NEXT_PUBLIC_APP_URL || "https://formlayer.co";
+    const { subject, html } = collaboratorInviteEmail({
+      inviterName,
+      inviterEmail: user.email!,
+      formulationName: formulation.name,
+      role,
+      acceptUrl: `${origin}/dashboard/formulations/${id}`,
+    });
+    resend.emails.send({ from: FROM_EMAIL, to: email, subject, html }).catch(() => {});
   }
 
   return NextResponse.json({ collaborator: data }, { status: 201 });

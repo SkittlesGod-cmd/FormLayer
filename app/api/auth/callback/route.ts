@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { welcomeEmail } from "@/lib/email/templates";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -59,6 +61,12 @@ export async function GET(request: NextRequest) {
       company,
       avatar_url: avatarUrl,
     });
+    // Fire welcome email — non-blocking, failure is silent
+    const resend = getResend();
+    if (resend && user.email) {
+      const { subject, html } = welcomeEmail(fullName);
+      resend.emails.send({ from: FROM_EMAIL, to: user.email, subject, html }).catch(() => {});
+    }
   } else if (avatarUrl && !profile.avatar_url) {
     await supabase
       .from("profiles")

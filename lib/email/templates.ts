@@ -1,3 +1,53 @@
+export function collaboratorInviteEmail(opts: {
+  inviterName: string;
+  inviterEmail: string;
+  formulationName: string;
+  role: "editor" | "viewer";
+  acceptUrl: string;
+}): { subject: string; html: string } {
+  const { inviterName, formulationName, role, acceptUrl } = opts;
+  const roleLabel = role === "editor" ? "edit" : "view";
+  return {
+    subject: `${inviterName} shared a formulation with you on FormLayer`,
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="padding:32px 40px 24px;border-bottom:1px solid rgba(0,0,0,0.06);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#7F77DD;"></div>
+        <span style="font-size:15px;font-weight:600;color:#0a0a0a;letter-spacing:-0.02em;">FormLayer</span>
+      </div>
+    </div>
+    <div style="padding:32px 40px;">
+      <h1 style="margin:0 0 12px;font-size:20px;font-weight:600;color:#0a0a0a;letter-spacing:-0.02em;">
+        You've been invited to ${roleLabel} a formulation
+      </h1>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#6b7280;">
+        <strong style="color:#0a0a0a;">${inviterName}</strong> has invited you to ${roleLabel} <strong style="color:#0a0a0a;">"${formulationName}"</strong> on FormLayer.
+      </p>
+      <div style="background:#f9fafb;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Formulation</p>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0a0a0a;">${formulationName}</p>
+        <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">You can ${roleLabel} this formulation</p>
+      </div>
+      <a href="${acceptUrl}" style="display:inline-block;background:#0a0a0a;color:#fff;font-size:13px;font-weight:500;text-decoration:none;padding:12px 24px;border-radius:10px;">
+        Open formulation →
+      </a>
+    </div>
+    <div style="padding:20px 40px;border-top:1px solid rgba(0,0,0,0.06);background:#f9fafb;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;">
+        You're receiving this because ${inviterName} invited you to collaborate on FormLayer.
+        Questions? <a href="mailto:support@formlayer.co" style="color:#7F77DD;">support@formlayer.co</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  };
+}
+
 export function welcomeEmail(name: string): { subject: string; html: string } {
   const firstName = name?.split(" ")[0] || "there";
   return {
