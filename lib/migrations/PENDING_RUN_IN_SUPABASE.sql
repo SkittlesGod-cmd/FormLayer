@@ -18,17 +18,33 @@ create table if not exists formulation_collaborators (
 alter table formulation_collaborators enable row level security;
 
 -- Owners can read, insert, and delete their own collaborator rows
-create policy if not exists "Owners manage collaborators"
-  on formulation_collaborators
-  for all
-  using (owner_id = auth.uid())
-  with check (owner_id = auth.uid());
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'formulation_collaborators'
+      and policyname = 'Owners manage collaborators'
+  ) then
+    create policy "Owners manage collaborators"
+      on formulation_collaborators
+      for all
+      using (owner_id = auth.uid())
+      with check (owner_id = auth.uid());
+  end if;
+end $$;
 
 -- Collaborators can read rows where they are the invitee
-create policy if not exists "Collaborators can read their rows"
-  on formulation_collaborators
-  for select
-  using (user_id = auth.uid());
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'formulation_collaborators'
+      and policyname = 'Collaborators can read their rows'
+  ) then
+    create policy "Collaborators can read their rows"
+      on formulation_collaborators
+      for select
+      using (user_id = auth.uid());
+  end if;
+end $$;
 
 -- Migration 005: Accuracy fields on formulations
 alter table formulations
