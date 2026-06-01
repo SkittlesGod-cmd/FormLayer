@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, Check, Copy, FlaskConical, LayoutGrid,
-  LayoutList, Loader2, Plus, Search, ShieldCheck, Sparkles, Zap,
+  LayoutList, Loader2, Plus, Search, Sparkles, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,47 +37,38 @@ function relativeDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function scoreColor(s: number | null) {
-  if (s === null) return "#9ca3af";
-  if (s >= 80) return "#10b981";
-  if (s >= 60) return "#f59e0b";
-  return "#ef4444";
+function scoreColor(s: number | null): string {
+  if (s === null) return "text-gray-300";
+  if (s >= 80) return "text-emerald-600";
+  if (s >= 60) return "text-amber-500";
+  return "text-red-500";
 }
 
 const STATUS_GLOW: Record<FormulationStatus, string> = {
-  compliant:   "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]",
-  in_progress: "bg-brand shadow-[0_0_8px_rgba(91,110,225,0.7)]",
-  review:      "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]",
-  draft:       "bg-zinc-400",
+  compliant:   "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]",
+  in_progress: "bg-brand shadow-[0_0_6px_rgba(91,110,225,0.6)]",
+  review:      "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]",
+  draft:       "bg-zinc-300",
 };
 
-const STATUS_TEXT: Record<FormulationStatus, string> = {
-  compliant:   "text-emerald-400",
+const STATUS_TEXT_COLOR: Record<FormulationStatus, string> = {
+  compliant:   "text-emerald-600",
   in_progress: "text-brand",
-  review:      "text-amber-400",
-  draft:       "text-zinc-400",
-};
-
-const STATUS_FILTER_ACTIVE: Record<FormulationStatus | "all", string> = {
-  all:         "bg-white text-gray-950 shadow-sm",
-  draft:       "bg-white text-zinc-700 shadow-sm",
-  in_progress: "bg-white text-brand shadow-sm",
-  review:      "bg-white text-amber-600 shadow-sm",
-  compliant:   "bg-white text-emerald-700 shadow-sm",
+  review:      "text-amber-600",
+  draft:       "text-zinc-500",
 };
 
 // ─── Evidence segment bar ─────────────────────────────────────────────────────
 
 function EvidenceBar({ ingredients }: { ingredients: FormulationIngredient[] }) {
   if (!ingredients.length) return null;
-  const GAP = 2;
   return (
-    <div className="flex w-full overflow-hidden rounded-full" style={{ gap: GAP, height: 6 }}>
+    <div className="flex w-full gap-px overflow-hidden rounded-full" style={{ height: 5 }}>
       {ingredients.map((ing, i) => (
         <div
           key={i}
           className={cn(
-            "flex-1 rounded-full transition-all",
+            "flex-1",
             ing.evidence_grade === "A" ? "bg-emerald-400" :
             ing.evidence_grade === "B" ? "bg-amber-400" :
             ing.evidence_grade === "C" ? "bg-orange-400" :
@@ -89,35 +80,7 @@ function EvidenceBar({ ingredients }: { ingredients: FormulationIngredient[] }) 
   );
 }
 
-// ─── Large compliance score arc ───────────────────────────────────────────────
-
-function ScoreArc({ score }: { score: number | null }) {
-  if (score === null) return (
-    <div className="flex flex-col items-center">
-      <span className="font-mono text-[11px] text-white/20">—</span>
-    </div>
-  );
-  const r = 18;
-  const circ = 2 * Math.PI * r;
-  const dash = (score / 100) * circ;
-  const color = scoreColor(score);
-  return (
-    <div className="relative flex items-center justify-center">
-      <svg width="44" height="44" viewBox="0 0 44 44">
-        <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3.5" />
-        <circle
-          cx="22" cy="22" r={r} fill="none" stroke={color} strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeDasharray={circ} strokeDashoffset={circ - dash}
-          style={{ transformOrigin: "22px 22px", transform: "rotate(-90deg)" }}
-        />
-      </svg>
-      <span className="absolute font-mono text-[11px] font-bold" style={{ color }}>{score}</span>
-    </div>
-  );
-}
-
-// ─── Grade distribution pills ─────────────────────────────────────────────────
+// ─── Grade pills ──────────────────────────────────────────────────────────────
 
 function GradePills({ ingredients }: { ingredients: FormulationIngredient[] }) {
   const c = ingredients.reduce((a, i) => {
@@ -127,9 +90,22 @@ function GradePills({ ingredients }: { ingredients: FormulationIngredient[] }) {
   if (!c.A && !c.B && !c.C) return null;
   return (
     <div className="flex items-center gap-1">
-      {c.A ? <span className="rounded-md bg-emerald-400/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-400">{c.A}A</span> : null}
-      {c.B ? <span className="rounded-md bg-amber-400/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-400">{c.B}B</span> : null}
-      {c.C ? <span className="rounded-md bg-orange-400/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-400">{c.C}C</span> : null}
+      {c.A ? <span className="rounded bg-emerald-50 px-1 text-[9px] font-bold text-emerald-600">{c.A}A</span> : null}
+      {c.B ? <span className="rounded bg-amber-50 px-1 text-[9px] font-bold text-amber-600">{c.B}B</span> : null}
+      {c.C ? <span className="rounded bg-gray-100 px-1 text-[9px] font-bold text-gray-500">{c.C}C</span> : null}
+    </div>
+  );
+}
+
+// ─── Stats tiles ──────────────────────────────────────────────────────────────
+
+function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-black/[0.06] bg-white px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      <p className={cn("mt-1 font-mono text-[22px] font-bold leading-none tracking-tight", accent ?? "text-gray-950")}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -151,42 +127,39 @@ function FormulaCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
+      transition={{ delay: index * 0.04, duration: 0.25 }}
     >
       <Link
         href={`/dashboard/formulations/${f.id}`}
-        className="group flex flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.05)] transition-all duration-300 hover:-translate-y-1 hover:border-brand/20 hover:shadow-[0_12px_32px_rgba(0,0,0,0.1)]"
+        className="group flex flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-all duration-200 hover:border-black/[0.12] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
       >
-        {/* Card header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 pt-5 pb-3">
           <div className="flex flex-col gap-1.5">
             {productLabel && (
-              <span className="w-fit rounded-md border border-black/[0.06] bg-gray-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+              <span className="w-fit rounded-md border border-black/[0.06] bg-gray-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                 {productLabel}
               </span>
             )}
             {ings.length > 0 && (
-              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                <span className="font-mono font-semibold text-gray-700">{ings.length}</span>
-                ingredient{ings.length !== 1 ? "s" : ""}
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[11px] font-semibold text-gray-700">{ings.length}</span>
+                <span className="text-[11px] text-gray-400">ingredient{ings.length !== 1 ? "s" : ""}</span>
                 <GradePills ingredients={ings} />
               </div>
             )}
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className={cn("size-1.5 rounded-full", STATUS_GLOW[f.status])} />
-              <span className={cn("text-[11px] font-semibold", STATUS_TEXT[f.status])}>
+              <span className={cn("text-[11px] font-semibold", STATUS_TEXT_COLOR[f.status])}>
                 {STATUS_LABELS[f.status]}
               </span>
             </div>
             {f.compliance_score !== null && (
-              <span
-                className="font-mono text-[11px] font-bold"
-                style={{ color: scoreColor(f.compliance_score) }}
-              >
+              <span className={cn("font-mono text-[11px] font-bold", scoreColor(f.compliance_score))}>
                 {f.compliance_score}/100
               </span>
             )}
@@ -194,12 +167,12 @@ function FormulaCard({
         </div>
 
         {/* Name + description */}
-        <div className="flex-1 px-6 pb-5">
-          <h3 className="text-[17px] font-semibold leading-snug tracking-[-0.01em] text-gray-950 transition-colors group-hover:text-brand">
+        <div className="flex-1 px-5 pb-4">
+          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.015em] text-gray-950 transition-colors group-hover:text-brand">
             {f.name}
           </h3>
           {f.description && (
-            <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-gray-500">
+            <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-gray-500">
               {f.description}
             </p>
           )}
@@ -207,24 +180,21 @@ function FormulaCard({
 
         {/* Evidence bar */}
         {ings.length > 0 && (
-          <div className="px-6 pb-4">
+          <div className="px-5 pb-3">
             <EvidenceBar ingredients={ings} />
           </div>
         )}
 
         {/* Ingredient pills */}
         {ings.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-6 pb-5">
+          <div className="flex flex-wrap items-center gap-1.5 px-5 pb-4">
             {first3.map((ing, i) => (
-              <span
-                key={i}
-                className="rounded-full border border-black/[0.06] bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600"
-              >
+              <span key={i} className="rounded-full border border-black/[0.06] bg-gray-50 px-2.5 py-0.5 text-[11px] font-medium text-gray-600">
                 {ing.name}
               </span>
             ))}
             {extra > 0 && (
-              <span className="rounded-full border border-black/[0.06] bg-gray-50 px-2.5 py-1 text-[11px] text-gray-400">
+              <span className="rounded-full border border-black/[0.06] bg-gray-50 px-2.5 py-0.5 text-[11px] text-gray-400">
                 +{extra} more
               </span>
             )}
@@ -232,9 +202,9 @@ function FormulaCard({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-black/[0.05] bg-gray-50/80 px-6 py-3">
+        <div className="flex items-center justify-between border-t border-black/[0.05] bg-gray-50/60 px-5 py-2.5">
           <span className="text-[11px] text-gray-400">{relativeDate(f.updated_at)}</span>
-          <div className="flex items-center gap-2 opacity-0 transition-all group-hover:opacity-100">
+          <div className="flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
             <button
               type="button"
               onClick={e => onDuplicate(e, f.id)}
@@ -269,14 +239,14 @@ function FormulaRow({
   return (
     <Link
       href={`/dashboard/formulations/${f.id}`}
-      className="group flex items-center gap-5 border-b border-black/[0.04] px-6 py-4 transition last:border-0 hover:bg-black/[0.015]"
+      className="group flex items-center gap-4 border-b border-black/[0.04] px-5 py-3.5 transition last:border-0 hover:bg-gray-50/60"
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-gray-50">
-        <FlaskConical className="size-4 text-gray-400" />
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-black/[0.06] bg-gray-50">
+        <FlaskConical className="size-3.5 text-gray-400" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="truncate text-[14px] font-semibold text-gray-950 transition group-hover:text-brand">
+          <p className="truncate text-[13px] font-semibold text-gray-950 transition group-hover:text-brand">
             {f.name}
           </p>
           {productLabel && (
@@ -286,20 +256,19 @@ function FormulaRow({
           )}
         </div>
         {f.description && (
-          <p className="mt-0.5 truncate text-[12px] text-gray-400">{f.description}</p>
+          <p className="mt-0.5 truncate text-[11px] text-gray-400">{f.description}</p>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-6">
+      <div className="flex shrink-0 items-center gap-5">
         <span className="hidden font-mono text-[12px] text-gray-400 sm:block">{ings.length} ing.</span>
-        <div className="hidden items-center gap-2 sm:flex">
-          <span className={cn("size-1.5 rounded-full shrink-0", STATUS_GLOW[f.status])} />
-          <span className={cn("text-[12px] font-medium", STATUS_TEXT[f.status])}>{STATUS_LABELS[f.status]}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_GLOW[f.status])} />
+          <span className={cn("hidden text-[12px] font-semibold sm:block", STATUS_TEXT_COLOR[f.status])}>
+            {STATUS_LABELS[f.status]}
+          </span>
         </div>
         {f.compliance_score !== null && (
-          <span
-            className="hidden font-mono text-[13px] font-bold sm:block"
-            style={{ color: scoreColor(f.compliance_score) }}
-          >
+          <span className={cn("hidden font-mono text-[12px] font-bold sm:block", scoreColor(f.compliance_score))}>
             {f.compliance_score}/100
           </span>
         )}
@@ -309,7 +278,7 @@ function FormulaRow({
           onClick={e => onDuplicate(e, f.id)}
           disabled={duplicating === f.id}
           title="Duplicate"
-          className="flex size-7 items-center justify-center rounded-lg border border-transparent text-gray-300 opacity-0 transition hover:border-black/[0.08] hover:bg-gray-50 hover:text-gray-600 group-hover:opacity-100 disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-md border border-transparent text-gray-300 opacity-0 transition hover:border-black/[0.08] hover:bg-gray-50 hover:text-gray-600 group-hover:opacity-100 disabled:opacity-40"
         >
           {duplicating === f.id ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
         </button>
@@ -323,64 +292,67 @@ function FormulaRow({
 function EmptyLibrary({ hasFilter, atLimit }: { hasFilter: boolean; atLimit: boolean }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-28 text-center"
+      className="flex flex-col items-center justify-center py-24 text-center"
     >
-      <div className="relative mb-8">
-        <div className="flex size-20 items-center justify-center rounded-3xl border border-black/[0.06] bg-white shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
-          <FlaskConical className="size-9 text-gray-200" />
+      <div className="relative mb-6">
+        <div className="flex size-16 items-center justify-center rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+          <FlaskConical className="size-7 text-gray-300" />
         </div>
-        <div className="absolute -right-1 -top-1 flex size-6 items-center justify-center rounded-full bg-brand shadow-[0_0_12px_rgba(91,110,225,0.5)]">
-          <Sparkles className="size-3 text-white" />
+        <div className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-brand shadow-[0_0_10px_rgba(91,110,225,0.4)]">
+          <Sparkles className="size-2.5 text-white" />
         </div>
       </div>
-      <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-gray-950">
-        {hasFilter ? "No formulas match" : "Your formula library awaits"}
+      <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-gray-950">
+        {hasFilter ? "No formulas match" : "Your formula library is empty"}
       </h3>
-      <p className="mt-2 max-w-sm text-[14px] leading-relaxed text-gray-400">
+      <p className="mt-1.5 max-w-xs text-[13px] leading-relaxed text-gray-500">
         {hasFilter
-          ? "Try a different search term or remove the status filter."
-          : "Build your first AI-powered supplement formulation. Clinical research, dosing, and compliance — all automated."
+          ? "Try a different search or remove the status filter."
+          : "Create your first AI-powered formulation. Research, formulate, and validate in one automated flow."
         }
       </p>
       {!hasFilter && !atLimit && (
         <Link
           href="/dashboard/formulations/new"
-          className="mt-8 flex items-center gap-2.5 rounded-2xl bg-gray-950 px-7 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-gray-800"
+          className="mt-6 flex items-center gap-2 rounded-xl bg-gray-950 px-5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-gray-800"
         >
-          <Sparkles className="size-4 text-brand" />
-          Build your first formula
+          <Plus className="size-4" />
+          New formula
         </Link>
       )}
     </motion.div>
   );
 }
 
-// ─── Skeleton loading ─────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
-function CardSkeleton({ i }: { i: number }) {
+function CardSkeleton() {
   return (
-    <div className="flex flex-col rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]" style={{ animationDelay: `${i * 80}ms` }}>
-      <div className="px-6 pt-6 pb-4">
-        <div className="flex justify-between">
-          <div className="h-4 w-16 animate-pulse rounded-md bg-gray-100" />
-          <div className="h-4 w-20 animate-pulse rounded-full bg-gray-100" />
+    <div className="flex flex-col rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+      <div className="px-5 pt-5 pb-3 flex justify-between">
+        <div className="space-y-1.5">
+          <div className="h-4 w-14 animate-pulse rounded bg-gray-100" />
+          <div className="h-3 w-20 animate-pulse rounded bg-gray-100/70" />
         </div>
+        <div className="h-4 w-16 animate-pulse rounded-full bg-gray-100" />
       </div>
-      <div className="flex-1 space-y-2 px-6 pb-5">
+      <div className="flex-1 space-y-2 px-5 pb-4">
         <div className="h-5 w-3/4 animate-pulse rounded bg-gray-100" />
-        <div className="h-3 w-full animate-pulse rounded bg-gray-100/70" />
-        <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100/50" />
+        <div className="h-3 w-full animate-pulse rounded bg-gray-100/60" />
+        <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100/40" />
       </div>
-      <div className="px-6 pb-4">
-        <div className="h-1.5 w-full animate-pulse rounded-full bg-gray-100" />
+      <div className="px-5 pb-3">
+        <div className="h-1 w-full animate-pulse rounded-full bg-gray-100" />
       </div>
-      <div className="flex gap-1.5 px-6 pb-5">
-        {[60, 48, 52].map((w, j) => <div key={j} className="h-6 animate-pulse rounded-full bg-gray-100" style={{ width: w }} />)}
+      <div className="flex gap-1.5 px-5 pb-4">
+        {[56, 44, 52].map((w, i) => (
+          <div key={i} className="h-5 animate-pulse rounded-full bg-gray-100" style={{ width: w }} />
+        ))}
       </div>
-      <div className="border-t border-black/[0.04] bg-gray-50/80 px-6 py-3">
-        <div className="h-3 w-16 animate-pulse rounded bg-gray-100" />
+      <div className="border-t border-black/[0.04] bg-gray-50/60 px-5 py-2.5">
+        <div className="h-3 w-14 animate-pulse rounded bg-gray-100" />
       </div>
     </div>
   );
@@ -406,15 +378,12 @@ export default function FormulationsListPage() {
     setError(null);
     fetch("/api/formulations", { cache: "no-store" })
       .then(r => { if (!r.ok) throw new Error("Failed to load"); return r.json(); })
-      .then(json => {
-        if (!cancelled) { setFormulations(json.formulations); setMeta(json.meta); }
-      })
+      .then(json => { if (!cancelled) { setFormulations(json.formulations); setMeta(json.meta); } })
       .catch(e => { if (!cancelled) setError(e.message ?? "Something went wrong"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  // Focus search on /
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "/" && !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) {
@@ -473,247 +442,213 @@ export default function FormulationsListPage() {
   const showStats = !loading && !error && formulations.length > 0;
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-6">
 
-      {/* ── Dark hero ─────────────────────────────────────────────────────── */}
-      <div className="-mx-5 -mt-8 mb-0 overflow-hidden bg-gray-950">
-        {/* Subtle dot grid */}
-        <div
-          className="absolute inset-0 opacity-30 pointer-events-none"
-          style={{
-            backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.15) 1px, transparent 1px)",
-            backgroundSize: "28px 28px",
-          }}
-        />
-
-        <div className="relative px-5 pt-10 pb-8">
-          {/* Top row */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/30">
-                Formula Library
-              </p>
-              <h1 className="mt-2 text-[36px] font-bold tracking-[-0.03em] text-white leading-none">
-                Formulations
-              </h1>
-              <p className="mt-2.5 text-[14px] text-white/40 max-w-md">
-                Build, validate, and iterate on supplement formulations with AI-powered research and compliance.
-              </p>
-            </div>
-
-            {/* New formula CTA */}
-            {atLimit ? (
-              <Link
-                href="/dashboard/billing"
-                className="shrink-0 flex items-center gap-2 rounded-2xl bg-brand/20 border border-brand/30 px-5 py-2.5 text-[13px] font-semibold text-brand transition hover:bg-brand/30"
-              >
-                <Zap className="size-4" />
-                Upgrade
-              </Link>
-            ) : (
-              <Link
-                href="/dashboard/formulations/new"
-                className="group shrink-0 flex items-center gap-2.5 rounded-2xl bg-white px-6 py-3 text-[14px] font-bold text-gray-950 shadow-[0_4px_20px_rgba(255,255,255,0.1)] transition hover:bg-white/90"
-              >
-                <Plus className="size-4" />
-                New formula
-                <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-              </Link>
-            )}
-          </div>
-
-          {/* Stats row */}
-          {showStats && (
-            <div className="mt-8 flex items-end gap-8 border-t border-white/[0.06] pt-6">
-              <div>
-                <p className="font-mono text-[32px] font-bold leading-none text-white">
-                  {formulations.length}
-                </p>
-                <p className="mt-1 text-[11px] font-medium text-white/30">Total</p>
-              </div>
-              {stats.compliant > 0 && (
-                <div>
-                  <p className="font-mono text-[32px] font-bold leading-none text-emerald-400">
-                    {stats.compliant}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-white/30">Compliant</p>
-                </div>
-              )}
-              {stats.inPipeline > 0 && (
-                <div>
-                  <p className="font-mono text-[32px] font-bold leading-none text-brand">
-                    {stats.inPipeline}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-white/30">In pipeline</p>
-                </div>
-              )}
-              {stats.avg !== null && (
-                <div>
-                  <p
-                    className="font-mono text-[32px] font-bold leading-none"
-                    style={{ color: scoreColor(stats.avg) }}
-                  >
-                    {stats.avg}
-                  </p>
-                  <p className="mt-1 text-[11px] font-medium text-white/30">Avg. compliance</p>
-                </div>
-              )}
-              {meta && meta.limit !== -1 && (
-                <div className="ml-auto flex flex-col items-end gap-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1 w-32 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-white/40 transition-all"
-                        style={{ width: `${Math.min(100, (meta.count / meta.limit) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="font-mono text-[11px] text-white/30">{meta.count}/{meta.limit}</span>
-                  </div>
-                  {atLimit && (
-                    <p className="text-[11px] text-amber-400">Limit reached — <Link href="/dashboard/billing" className="underline">upgrade</Link></p>
-                  )}
-                </div>
-              )}
-            </div>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+            Formula Library
+          </p>
+          <h1 className="mt-1 text-[22px] font-semibold tracking-[-0.025em] text-gray-950">
+            Formulations
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {atLimit ? (
+            <Link
+              href="/dashboard/billing"
+              className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90"
+            >
+              <Zap className="size-3.5" />
+              Upgrade
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/formulations/new"
+              className="flex items-center gap-2 rounded-xl bg-gray-950 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-gray-800"
+            >
+              <Plus className="size-4" />
+              New formula
+            </Link>
           )}
         </div>
+      </div>
 
-        {/* Search + filter strip inside the dark hero */}
-        <div className="border-t border-white/[0.06] bg-gray-900/60 px-5 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Search */}
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-white/30" />
-              <input
-                ref={searchRef}
-                type="search"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder='Search formulas… (/)'
-                className="h-9 w-full rounded-xl border border-white/[0.08] bg-white/[0.06] pl-9 pr-3 text-[13px] text-white outline-none transition placeholder:text-white/25 focus:border-white/20 focus:bg-white/10"
-              />
-            </div>
+      {/* ── Plan banner ─────────────────────────────────────────────────────── */}
+      {atLimit && meta && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-100 bg-amber-50 px-5 py-3.5">
+          <div>
+            <p className="text-[13px] font-semibold text-amber-900">
+              {meta.limit === 0 ? "No formulations included" : `${meta.count}/${meta.limit} used`} on {meta.plan} plan
+            </p>
+            <p className="mt-0.5 text-[12px] text-amber-700">Upgrade to create more and unlock advanced features.</p>
+          </div>
+          <Link href="/dashboard/billing" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-amber-700">
+            Upgrade
+          </Link>
+        </div>
+      )}
 
-            <div className="flex items-center gap-3">
-              {/* Status filter */}
-              <div className="flex items-center rounded-xl bg-white/[0.06] p-1 gap-0.5">
-                {(["all", ...FORMULATION_STATUSES] as const).map(s => {
-                  const count = s === "all" ? formulations.length : stats.counts[s];
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStatusFilter(s)}
-                      className={cn(
-                        "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all",
-                        statusFilter === s
-                          ? STATUS_FILTER_ACTIVE[s]
-                          : "text-white/40 hover:text-white/70"
-                      )}
-                    >
-                      {s === "all" ? "All" : STATUS_LABELS[s]}
-                      {count > 0 && (
-                        <span className={cn("ml-1.5 font-mono text-[10px]", statusFilter === s ? "opacity-60" : "opacity-40")}>
-                          {count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+      {/* ── Stats strip ─────────────────────────────────────────────────────── */}
+      {showStats && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
+          <StatTile label="Total" value={String(formulations.length)} />
+          <StatTile
+            label="Compliant"
+            value={String(stats.compliant)}
+            accent={stats.compliant > 0 ? "text-emerald-600" : undefined}
+          />
+          <StatTile
+            label="In pipeline"
+            value={String(stats.inPipeline)}
+            accent={stats.inPipeline > 0 ? "text-brand" : undefined}
+          />
+          {stats.avg !== null ? (
+            <StatTile
+              label="Avg. compliance"
+              value={String(stats.avg)}
+              accent={stats.avg >= 80 ? "text-emerald-600" : stats.avg >= 60 ? "text-amber-500" : "text-red-500"}
+            />
+          ) : (
+            meta && meta.limit !== -1 ? (
+              <div className="rounded-xl border border-black/[0.06] bg-white px-4 py-3.5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Usage</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-brand transition-all"
+                      style={{ width: `${Math.min(100, (meta.count / meta.limit) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 font-mono text-[11px] text-gray-400">{meta.count}/{meta.limit}</span>
+                </div>
               </div>
+            ) : <div />
+          )}
+        </motion.div>
+      )}
 
-              {/* View toggle */}
-              <div className="flex overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("grid")}
-                  className={cn(
-                    "flex size-9 items-center justify-center transition",
-                    viewMode === "grid" ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60"
-                  )}
-                >
-                  <LayoutGrid className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("list")}
-                  className={cn(
-                    "flex size-9 items-center justify-center transition",
-                    viewMode === "list" ? "bg-white/10 text-white" : "text-white/30 hover:text-white/60"
-                  )}
-                >
-                  <LayoutList className="size-3.5" />
-                </button>
-              </div>
+      {/* ── Search + filter + view toggle ───────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-gray-400" />
+          <input
+            ref={searchRef}
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search formulas… (/)"
+            className="h-9 w-full rounded-xl border border-black/[0.08] bg-white pl-9 pr-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/10"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Status pills */}
+          {!loading && formulations.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              {(["all", ...FORMULATION_STATUSES] as const).map(s => {
+                const count = s === "all" ? formulations.length : stats.counts[s];
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatusFilter(s)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition",
+                      statusFilter === s
+                        ? "border-gray-950 bg-gray-950 text-white"
+                        : "border-black/[0.08] bg-white text-gray-500 hover:border-black/20 hover:text-gray-800"
+                    )}
+                  >
+                    {s === "all" ? "All" : STATUS_LABELS[s]}
+                    {count > 0 && (
+                      <span className={cn("ml-1.5 font-mono text-[10px]", statusFilter === s ? "opacity-50" : "text-gray-400")}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+          )}
+          {/* View toggle */}
+          <div className="flex overflow-hidden rounded-xl border border-black/[0.08] bg-white">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={cn("flex size-9 items-center justify-center transition", viewMode === "grid" ? "bg-gray-950 text-white" : "text-gray-400 hover:text-gray-700")}
+            >
+              <LayoutGrid className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={cn("flex size-9 items-center justify-center transition", viewMode === "list" ? "bg-gray-950 text-white" : "text-gray-400 hover:text-gray-700")}
+            >
+              <LayoutList className="size-3.5" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ── Content area ──────────────────────────────────────────────────── */}
-      <div className="pt-8">
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-4 text-[13px] text-red-600">{error}</div>
-        )}
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-4 text-[13px] text-red-600">{error}</div>
+      )}
 
-        {/* Loading */}
-        {loading && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} i={i} />)}
-          </div>
-        )}
+      {loading && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+      )}
 
-        {/* Empty state */}
-        {!loading && !error && filtered.length === 0 && (
-          <EmptyLibrary hasFilter={hasFilter} atLimit={atLimit} />
-        )}
+      {!loading && !error && filtered.length === 0 && (
+        <EmptyLibrary hasFilter={hasFilter} atLimit={atLimit} />
+      )}
 
-        {/* Grid / List */}
-        {!loading && !error && filtered.length > 0 && (
-          <AnimatePresence mode="wait">
-            {viewMode === "grid" ? (
-              <motion.div
-                key="grid"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
-              >
-                {filtered.map((f, i) => (
-                  <FormulaCard
-                    key={f.id} f={f} index={i}
-                    onDuplicate={handleDuplicate} duplicating={duplicating}
-                  />
-                ))}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
-              >
-                <div className="grid items-center gap-5 border-b border-black/[0.05] bg-gray-50/80 px-6 py-3"
-                  style={{ gridTemplateColumns: "auto 1fr auto auto auto auto auto" }}>
-                  <span className="w-9" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Name</span>
-                  <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Ingredients</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Status</span>
-                  <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Score</span>
-                  <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Updated</span>
-                  <span className="w-7" />
-                </div>
-                {filtered.map(f => (
-                  <FormulaRow key={f.id} f={f} onDuplicate={handleDuplicate} duplicating={duplicating} />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        )}
-      </div>
-
+      {!loading && !error && filtered.length > 0 && (
+        <AnimatePresence mode="wait">
+          {viewMode === "grid" ? (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {filtered.map((f, i) => (
+                <FormulaCard key={f.id} f={f} index={i} onDuplicate={handleDuplicate} duplicating={duplicating} />
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+            >
+              <div className="grid items-center gap-4 border-b border-black/[0.05] bg-gray-50/60 px-5 py-2.5"
+                style={{ gridTemplateColumns: "auto 1fr auto auto auto auto auto" }}>
+                <span className="w-8" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Name</span>
+                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Ingredients</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Status</span>
+                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Score</span>
+                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:block">Updated</span>
+                <span className="w-7" />
+              </div>
+              {filtered.map(f => (
+                <FormulaRow key={f.id} f={f} onDuplicate={handleDuplicate} duplicating={duplicating} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }
