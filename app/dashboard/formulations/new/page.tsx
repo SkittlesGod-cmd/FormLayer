@@ -291,11 +291,11 @@ function ActivityFeed({ phase, streaming }: { phase: Phase; streaming: boolean }
           >
             <div className={cn(
               "flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-300",
-              isDone ? "bg-emerald-500" : "bg-brand"
+              isDone ? "bg-emerald-500" : "bg-gray-200"
             )}>
               {isDone
                 ? <Check className="size-3 text-white" />
-                : <span className="size-1.5 animate-pulse rounded-full bg-white" />
+                : <span className="size-1.5 animate-pulse rounded-full bg-gray-500" />
               }
             </div>
             <span className={cn(
@@ -326,40 +326,35 @@ function TerminalCard({
   statusLabel: string;
   statusColor: "brand" | "amber" | "emerald";
 }) {
-  const colorMap = {
-    brand: "text-brand",
-    amber: "text-amber-400",
-    emerald: "text-emerald-400",
+  const statusTextMap = {
+    brand: "text-gray-500",
+    amber: "text-amber-600",
+    emerald: "text-emerald-600",
   };
-  const dotMap = {
-    brand: "bg-brand",
+  const dotColorMap = {
+    brand: "bg-gray-400",
     amber: "bg-amber-400",
-    emerald: "bg-emerald-400",
+    emerald: "bg-emerald-500",
   };
   return (
-    <div className="rounded-2xl border border-gray-950/[0.08] bg-gray-950 px-6 py-5">
+    <div className="rounded-2xl border border-black/[0.06] bg-white px-6 py-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex gap-1.5">
-            <span className="size-2.5 rounded-full bg-red-400/60" />
-            <span className="size-2.5 rounded-full bg-amber-400/60" />
-            <span className="size-2.5 rounded-full bg-emerald-400/60" />
-          </div>
-          <span className="font-mono text-[11px] text-white/40">{agentLabel}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-gray-400">{agentLabel}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn(
             "size-1.5 rounded-full",
             streaming ? "animate-pulse" : "",
-            dotMap[statusColor]
+            dotColorMap[statusColor]
           )} />
-          <span className={cn("text-[11px] font-medium", colorMap[statusColor])}>{statusLabel}</span>
+          <span className={cn("text-[11px] font-medium", statusTextMap[statusColor])}>{statusLabel}</span>
         </div>
       </div>
       <ActivityFeed phase={phase} streaming={streaming} />
       {streamContent && (
-        <div className="mt-4 border-t border-white/10 pt-4">
-          <p className="mb-2 font-mono text-[10px] text-white/30">output stream</p>
+        <div className="mt-4 border-t border-black/[0.05] pt-4">
+          <p className="mb-2 font-mono text-[10px] text-gray-400">output</p>
           <div className="max-h-40 overflow-y-auto">
             <StreamingMarkdown content={streamContent} />
           </div>
@@ -879,25 +874,19 @@ export default function NewFormulationPage() {
                         className={cn(
                           "relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all duration-200",
                           selected
-                            ? "border-gray-950 bg-gray-950 shadow-[0_4px_20px_rgba(0,0,0,0.18)]"
+                            ? "border-gray-950 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.9),0_2px_8px_rgba(0,0,0,0.08)]"
                             : "border-black/[0.07] hover:border-black/20 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
                         )}
                       >
-                        <p className={cn(
-                          "text-[13px] font-semibold leading-snug",
-                          selected ? "text-white" : "text-gray-900"
-                        )}>
+                        <p className="text-[13px] font-semibold leading-snug text-gray-900">
                           {PRODUCT_TYPE_LABELS[type]}
                         </p>
-                        <p className={cn(
-                          "text-[11px] leading-snug",
-                          selected ? "text-white/50" : "text-gray-400"
-                        )}>
+                        <p className="text-[11px] leading-snug text-gray-400">
                           {PRODUCT_TYPE_DESC[type]}
                         </p>
                         {selected && (
                           <div className="absolute top-3 right-3">
-                            <Check className="size-4 text-white/70" />
+                            <Check className="size-4 text-gray-950" />
                           </div>
                         )}
                       </button>
