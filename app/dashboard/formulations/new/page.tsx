@@ -632,6 +632,8 @@ export default function NewFormulationPage() {
   const [formulationId, setFormulationId] = useState<string | null>(null);
   const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
   const [feedbackHistory, setFeedbackHistory] = useState<ChatMessage[]>([]);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [retryFn, setRetryFn] = useState<(() => void) | null>(null);
   const [reviewTab, setReviewTab] = useState<ReviewTab>("overview");
   const abortRef = useRef<AbortController | null>(null);
 
@@ -674,10 +676,10 @@ export default function NewFormulationPage() {
   async function stream(
     phaseKey: "research" | "formulate" | "refine" | "compliance_refine",
     feedback?: string, complianceRes?: string,
-  ): Promise<string> {
+  ): Promise<string | null> {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
-    setStreaming(true); setStreamContent("");
+    setStreaming(true); setStreamContent(""); setStreamError(null);
     let accumulated = "";
     try {
       const res = await fetch("/api/ai/builder", {
@@ -697,10 +699,13 @@ export default function NewFormulationPage() {
         accumulated += decoder.decode(value, { stream: true });
         setStreamContent(accumulated);
       }
+      return accumulated;
     } catch (e: unknown) {
-      if (!(e instanceof DOMException && e.name === "AbortError")) toast.error(getErrorMessage(e, "AI request failed"));
+      if (e instanceof DOMException && e.name === "AbortError") return null;
+      const msg = getErrorMessage(e, "Request failed");
+      setStreamError(msg);
+      return null;
     } finally { setStreaming(false); }
-    return accumulated;
   }
 
   // ── Phase transitions ──
@@ -708,12 +713,14 @@ export default function NewFormulationPage() {
     if (!intake.product_type || !intake.health_goal?.trim()) return;
     setPhase("researching");
     const content = await stream("research");
+    if (content === null) { setPhase("intake"); setRetryFn(() => startResearch); return; }
     setResearchContent(content); setPhase("research_review");
   }
 
   async function startFormulation() {
     setFeedbackHistory([]); setReviewTab("overview"); setPhase("formulating");
     const content = await stream("formulate");
+    if (content === null) { setPhase("research_review"); setRetryFn(() => startFormulation); return; }
     setFormulationContent(content);
     const parsed = parseFormulationJson(content);
     setParsedFormulation(parsed);
@@ -729,6 +736,7 @@ export default function NewFormulationPage() {
     if (feedback.trim()) setFeedbackHistory(h => [...h, { role: "user", text: feedback }]);
     setPhase("refining");
     const content = await stream("refine", feedback || "Refine the formulation for better efficacy and clinical backing.");
+    if (content === null) { setPhase("formulation_review"); setRetryFn(() => () => startRefine(feedback)); return; }
     setFormulationContent(content);
     const parsed = parseFormulationJson(content);
     setParsedFormulation(parsed);
@@ -764,6 +772,7 @@ export default function NewFormulationPage() {
       if (typeof data.score === "number" && data.score < 75 && attempt < 2) {
         setComplianceResult(data); setPhase("compliance_refining");
         const refined = await stream("compliance_refine", undefined, JSON.stringify({ score: data.score, issues: data.issues, recommendations: data.recommendations }));
+        if (!refined) { setPhase("formulation_review"); return; }
         setFormulationContent(refined);
         const parsed = parseFormulationJson(refined);
         if (parsed) { setParsedFormulation(parsed); await updateFormulation(id, parsed, "in_review"); }
@@ -965,6 +974,30 @@ export default function NewFormulationPage() {
           <div className="mb-7">
             <BuilderProgress phase={phase} />
           </div>
+
+          {/* Network error banner */}
+          <AnimatePresence>
+            {streamError && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-[11px]">!</span>
+                  <p className="text-[13px] text-red-700">{streamError}</p>
+                </div>
+                {retryFn && (
+                  <button
+                    type="button"
+                    onClick={() => { setStreamError(null); setRetryFn(null); retryFn(); }}
+                    className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[12px] font-medium text-red-600 transition hover:bg-red-50"
+                  >
+                    Retry
+                  </button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence mode="wait">
 
