@@ -223,7 +223,7 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
 function BuilderProgress({ phase }: { phase: Phase }) {
   const current = stepIndex(phase);
   return (
-    <div className="mb-8 flex items-center">
+    <div className="mb-10 flex items-center">
       {PHASE_STEPS.map((step, i) => {
         const done = i < current;
         const active = i === current;
@@ -234,7 +234,7 @@ function BuilderProgress({ phase }: { phase: Phase }) {
               <div className={cn(
                 "flex size-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-500",
                 done ? "bg-emerald-500 text-white" :
-                active ? "bg-brand text-white ring-4 ring-brand/20" :
+                active ? "bg-gray-950 text-white ring-4 ring-gray-950/10" :
                 "bg-gray-100 text-gray-400"
               )}>
                 {done ? <Check className="size-3.5" /> : (
@@ -245,7 +245,7 @@ function BuilderProgress({ phase }: { phase: Phase }) {
               </div>
               <span className={cn(
                 "hidden text-[11px] font-medium sm:block whitespace-nowrap",
-                done ? "text-emerald-600" : active ? "text-brand" : "text-gray-400"
+                done ? "text-emerald-600" : active ? "text-gray-950" : "text-gray-400"
               )}>
                 {step.label}
               </span>
@@ -798,9 +798,9 @@ export default function NewFormulationPage() {
 
   // ── Render ──
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pb-16">
+    <div className="mx-auto max-w-3xl pb-16">
       {/* Header */}
-      <div>
+      <div className="mb-10">
         <Link
           href="/dashboard/formulations"
           className="inline-flex items-center gap-1 text-[12px] text-gray-400 transition hover:text-gray-700"
@@ -808,14 +808,36 @@ export default function NewFormulationPage() {
           <ChevronLeft className="size-3.5" />
           Formulations
         </Link>
-        <div className="mt-3">
-          <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-gray-950">
-            AI Formulation Builder
-          </h1>
-          <p className="mt-0.5 text-[13px] text-gray-500">
-            Answer a few questions — AI researches, formulates, and validates your product end-to-end.
-          </p>
-        </div>
+
+        {phase === "intake" && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 text-center"
+          >
+            <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/[0.05] px-3 py-1">
+              <Sparkles className="size-3 text-brand" />
+              <span className="text-[11px] font-semibold tracking-wide text-brand">AI Formulation Studio</span>
+            </div>
+            <h1 className="text-[32px] font-semibold tracking-[-0.035em] text-gray-950">
+              Build a new formula
+            </h1>
+            <p className="mx-auto mt-2.5 max-w-sm text-[14px] leading-relaxed text-gray-500">
+              Brief the AI on your product. It researches clinical evidence, formulates the stack, and validates compliance — end to end.
+            </p>
+          </motion.div>
+        )}
+
+        {phase !== "intake" && (
+          <div className="mt-4">
+            <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-gray-950">
+              AI Formulation Builder
+            </h1>
+            <p className="mt-0.5 text-[13px] text-gray-500">
+              {intake.health_goal ? `Building: ${intake.health_goal.slice(0, 60)}${intake.health_goal.length > 60 ? "…" : ""}` : "Processing your formulation…"}
+            </p>
+          </div>
+        )}
       </div>
 
       <BuilderProgress phase={phase} />
@@ -829,59 +851,59 @@ export default function NewFormulationPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
-            className="space-y-4"
+            className="space-y-3"
           >
             {/* Step 1: Product format */}
             <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
-                <div className="flex items-center gap-3">
+              <div className="px-6 pt-6 pb-5">
+                <div className="mb-5 flex items-center gap-3">
                   <div className={cn(
-                    "flex size-7 items-center justify-center rounded-full text-[12px] font-bold text-white",
-                    intake.product_type ? "bg-emerald-500" : "bg-brand"
+                    "flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white transition-colors",
+                    intake.product_type ? "bg-emerald-500" : "bg-gray-950"
                   )}>
                     {intake.product_type ? <Check className="size-3.5" /> : "1"}
                   </div>
                   <div>
                     <h2 className="text-[15px] font-semibold text-gray-950">What format are you building?</h2>
-                    <p className="text-[12px] text-gray-500">Choose the delivery form for your supplement</p>
+                    <p className="text-[12px] text-gray-400">Choose the delivery form for your supplement</p>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5 p-5 sm:grid-cols-4">
-                {PRODUCT_TYPES.map(type => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setIntake(d => ({ ...d, product_type: type }))}
-                    className={cn(
-                      "group flex flex-col gap-2.5 rounded-xl border p-4 text-left transition-all duration-200",
-                      intake.product_type === type
-                        ? "border-brand bg-brand/[0.05] shadow-[0_0_0_2px_rgba(91,110,225,0.15)]"
-                        : "border-black/[0.07] hover:border-brand/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-                    )}
-                  >
-                    <div className={cn(
-                      "flex size-8 items-center justify-center rounded-lg text-[13px] font-bold transition-colors",
-                      intake.product_type === type
-                        ? "bg-brand text-white"
-                        : "bg-gray-100 text-gray-500 group-hover:bg-brand/10 group-hover:text-brand"
-                    )}>
-                      {PRODUCT_TYPE_LABELS[type][0]}
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "text-[13px] font-semibold leading-snug",
-                        intake.product_type === type ? "text-brand" : "text-gray-900"
-                      )}>
-                        {PRODUCT_TYPE_LABELS[type]}
-                      </p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-gray-400">{PRODUCT_TYPE_DESC[type]}</p>
-                    </div>
-                    {intake.product_type === type && (
-                      <Check className="ml-auto mt-auto size-4 text-brand" />
-                    )}
-                  </button>
-                ))}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {PRODUCT_TYPES.map(type => {
+                    const selected = intake.product_type === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setIntake(d => ({ ...d, product_type: type }))}
+                        className={cn(
+                          "relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-all duration-200",
+                          selected
+                            ? "border-gray-950 bg-gray-950 shadow-[0_4px_20px_rgba(0,0,0,0.18)]"
+                            : "border-black/[0.07] hover:border-black/20 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                        )}
+                      >
+                        <p className={cn(
+                          "text-[13px] font-semibold leading-snug",
+                          selected ? "text-white" : "text-gray-900"
+                        )}>
+                          {PRODUCT_TYPE_LABELS[type]}
+                        </p>
+                        <p className={cn(
+                          "text-[11px] leading-snug",
+                          selected ? "text-white/50" : "text-gray-400"
+                        )}>
+                          {PRODUCT_TYPE_DESC[type]}
+                        </p>
+                        {selected && (
+                          <div className="absolute top-3 right-3">
+                            <Check className="size-4 text-white/70" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -893,11 +915,11 @@ export default function NewFormulationPage() {
                   animate={{ opacity: 1, y: 0 }}
                   className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
                 >
-                  <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
-                    <div className="flex items-center gap-3">
+                  <div className="px-6 pt-6 pb-5">
+                    <div className="mb-5 flex items-center gap-3">
                       <div className={cn(
-                        "flex size-7 items-center justify-center rounded-full text-[12px] font-bold text-white",
-                        intake.health_goal?.trim() ? "bg-emerald-500" : "bg-brand"
+                        "flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white transition-colors",
+                        intake.health_goal?.trim() ? "bg-emerald-500" : "bg-gray-950"
                       )}>
                         {intake.health_goal?.trim() ? <Check className="size-3.5" /> : "2"}
                       </div>
@@ -905,19 +927,19 @@ export default function NewFormulationPage() {
                         <h2 className="text-[15px] font-semibold text-gray-950">
                           What health outcome should it deliver?
                         </h2>
-                        <p className="text-[12px] text-gray-500">Be specific — this drives ingredient selection and dosing</p>
+                        <p className="text-[12px] text-gray-400">Be specific — this drives ingredient selection and dosing</p>
                       </div>
                     </div>
-                  </div>
-                  <div className="space-y-4 p-5">
+
                     <textarea
                       value={intake.health_goal ?? ""}
                       onChange={e => setIntake(d => ({ ...d, health_goal: e.target.value }))}
-                      rows={3}
-                      placeholder="e.g. Improve cognitive focus and mental clarity for knowledge workers throughout the workday…"
-                      className="w-full resize-none rounded-xl border border-black/[0.08] bg-gray-50/50 px-4 py-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10"
+                      rows={4}
+                      placeholder="e.g. Improve cognitive focus and mental clarity for knowledge workers throughout the workday without stimulant crash…"
+                      className="w-full resize-none rounded-xl border border-black/[0.1] bg-gray-50/60 px-4 py-3.5 text-[13px] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-black/[0.04]"
                     />
-                    <div className="flex flex-wrap gap-1.5">
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {[
                         "Cognitive focus & mental clarity",
                         "Sleep quality & recovery",
@@ -935,8 +957,8 @@ export default function NewFormulationPage() {
                           className={cn(
                             "rounded-full border px-3 py-1 text-[11px] font-medium transition",
                             intake.health_goal === ex
-                              ? "border-brand/30 bg-brand/[0.06] text-brand"
-                              : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-brand/20 hover:text-gray-800"
+                              ? "border-gray-950 bg-gray-950 text-white"
+                              : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-black/20 hover:text-gray-800"
                           )}
                         >
                           {ex}
@@ -956,9 +978,9 @@ export default function NewFormulationPage() {
                   animate={{ opacity: 1, y: 0 }}
                   className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
                 >
-                  <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-7 items-center justify-center rounded-full bg-gray-200 text-[12px] font-bold text-gray-500">
+                  <div className="px-6 pt-6 pb-5">
+                    <div className="mb-5 flex items-center gap-3">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[12px] font-bold text-gray-500">
                         3
                       </div>
                       <div>
@@ -966,40 +988,41 @@ export default function NewFormulationPage() {
                           Target consumer &amp; requirements
                           <span className="ml-2 text-[11px] font-normal text-gray-400">(optional)</span>
                         </h2>
-                        <p className="text-[12px] text-gray-500">Tailor the formula to a specific audience and constraints</p>
+                        <p className="text-[12px] text-gray-400">Tailor the formula to a specific audience and constraints</p>
                       </div>
                     </div>
-                  </div>
-                  <div className="space-y-5 p-5">
-                    <div>
-                      <p className="mb-2.5 text-[12px] font-semibold text-gray-600">Target consumer</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {CONSUMER_OPTIONS.map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setIntake(d => ({ ...d, consumer: d.consumer === opt ? "" : opt }))}
-                            className={cn(
-                              "rounded-full border px-3 py-1 text-[11px] font-medium transition",
-                              intake.consumer === opt
-                                ? "border-brand/30 bg-brand/[0.06] text-brand"
-                                : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-black/20 hover:text-gray-700"
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
+
+                    <div className="space-y-5">
+                      <div>
+                        <p className="mb-2.5 text-[12px] font-semibold text-gray-600">Target consumer</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {CONSUMER_OPTIONS.map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setIntake(d => ({ ...d, consumer: d.consumer === opt ? "" : opt }))}
+                              className={cn(
+                                "rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                                intake.consumer === opt
+                                  ? "border-gray-950 bg-gray-950 text-white"
+                                  : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-black/20 hover:text-gray-700"
+                              )}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-[12px] font-semibold text-gray-600">Special requirements</p>
-                      <input
-                        type="text"
-                        value={intake.requirements ?? ""}
-                        onChange={e => setIntake(d => ({ ...d, requirements: e.target.value }))}
-                        placeholder="e.g. Vegan, no caffeine, NSF certified, under $2/serving…"
-                        className="h-10 w-full rounded-xl border border-black/[0.08] bg-gray-50/60 px-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10"
-                      />
+                      <div>
+                        <p className="mb-2 text-[12px] font-semibold text-gray-600">Special requirements</p>
+                        <input
+                          type="text"
+                          value={intake.requirements ?? ""}
+                          onChange={e => setIntake(d => ({ ...d, requirements: e.target.value }))}
+                          placeholder="e.g. Vegan, no caffeine, NSF certified, under $2/serving…"
+                          className="h-10 w-full rounded-xl border border-black/[0.08] bg-gray-50/60 px-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:ring-2 focus:ring-black/[0.04]"
+                        />
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -1012,16 +1035,21 @@ export default function NewFormulationPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-end pt-2"
+                  className="pt-2"
                 >
                   <button
                     type="button"
                     onClick={startResearch}
-                    className="group flex items-center gap-2.5 rounded-2xl bg-gray-950 px-7 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-gray-800"
+                    className="group w-full rounded-2xl bg-gray-950 px-8 py-5 text-center shadow-[0_8px_32px_rgba(0,0,0,0.14)] transition hover:bg-gray-800"
                   >
-                    <Sparkles className="size-4 text-brand" />
-                    Start AI research
-                    <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+                    <div className="flex items-center justify-center gap-3">
+                      <Sparkles className="size-5 text-brand" />
+                      <span className="text-[15px] font-semibold text-white">Start AI research</span>
+                      <ArrowRight className="size-5 text-white/60 transition group-hover:translate-x-0.5" />
+                    </div>
+                    <p className="mt-1.5 text-[12px] text-white/40">
+                      AI scans clinical literature, formulates the stack, and runs compliance — typically 60–90 seconds
+                    </p>
                   </button>
                 </motion.div>
               )}
@@ -1224,7 +1252,7 @@ export default function NewFormulationPage() {
             <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4">
               <div className="flex items-start gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-100">
-                  <ShieldCheck className="size-4.5 text-amber-600" />
+                  <ShieldCheck className="size-4 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-[13px] font-semibold text-amber-900">
@@ -1381,17 +1409,17 @@ export default function NewFormulationPage() {
                     className={cn(
                       "group rounded-2xl border p-5 transition-all",
                       primary
-                        ? "border-brand/25 bg-brand/[0.04] hover:border-brand/40 hover:bg-brand/[0.07]"
+                        ? "border-gray-950 bg-gray-950 hover:bg-gray-800"
                         : "border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-black/[0.12] hover:shadow-[0_4px_12px_rgba(0,0,0,0.07)]"
                     )}
                   >
-                    <p className={cn("text-[13px] font-semibold", primary ? "text-brand" : "text-gray-950")}>
+                    <p className={cn("text-[13px] font-semibold", primary ? "text-white" : "text-gray-950")}>
                       {label}
                     </p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-gray-500">{desc}</p>
+                    <p className={cn("mt-1 text-[12px] leading-relaxed", primary ? "text-white/50" : "text-gray-500")}>{desc}</p>
                     <p className={cn(
                       "mt-4 flex items-center gap-1 text-[12px] font-medium transition",
-                      primary ? "text-brand" : "text-gray-400 group-hover:text-gray-700"
+                      primary ? "text-white/60 group-hover:text-white/80" : "text-gray-400 group-hover:text-gray-700"
                     )}>
                       Open <ArrowRight className="size-3 transition group-hover:translate-x-0.5" />
                     </p>
