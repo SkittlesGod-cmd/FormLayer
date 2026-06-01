@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,8 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  MessageSquare,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -79,7 +79,12 @@ interface ComplianceResult {
   review_disclaimer?: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+interface ChatMessage {
+  role: "user" | "ai";
+  text: string;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const CONSUMER_OPTIONS = [
   "General wellness", "Athletic performance", "Cognitive health",
@@ -95,6 +100,51 @@ const PHASE_STEPS = [
   { key: "complete", label: "Complete" },
 ];
 
+const ACTIVITY_STEPS: Partial<Record<Phase, string[]>> = {
+  researching: [
+    "Connecting to clinical research database",
+    "Scanning 3,200+ peer-reviewed studies",
+    "Identifying evidence-backed candidates",
+    "Analyzing dose-response relationships",
+    "Mapping synergy and antagonism profiles",
+    "Cross-referencing pharmacokinetic data",
+    "Evaluating safety and tolerability",
+    "Compiling research summary",
+  ],
+  formulating: [
+    "Synthesizing research into formula",
+    "Selecting optimal ingredient forms",
+    "Calculating clinical dose ranges",
+    "Analyzing stack synergies",
+    "Checking nutrient interaction profiles",
+    "Structuring Supplement Facts panel",
+    "Writing ingredient rationale",
+    "Finalizing formulation JSON",
+  ],
+  refining: [
+    "Processing your feedback",
+    "Recalculating dose adjustments",
+    "Updating ingredient selection",
+    "Revalidating against clinical benchmarks",
+    "Finalizing revised formula",
+  ],
+  compliance_running: [
+    "Loading FDA DSHEA regulatory guidelines",
+    "Reviewing structure/function claims",
+    "Checking upper tolerable intake levels",
+    "Analyzing label and disclaimer requirements",
+    "Scoring regulatory risk factors",
+  ],
+  compliance_refining: [
+    "Analyzing compliance gaps",
+    "Revising flagged claims",
+    "Rechecking dose thresholds",
+    "Rebuilding formula for full compliance",
+  ],
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function stepIndex(phase: Phase): number {
   if (phase === "intake") return 0;
   if (phase === "researching" || phase === "research_review") return 1;
@@ -107,17 +157,12 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
   function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
-
   function evidenceGrade(value: unknown): "A" | "B" | "C" | undefined {
     return value === "A" || value === "B" || value === "C" ? value : undefined;
   }
-
   function doseAssessment(value: unknown): ParsedIngredient["dose_assessment"] {
-    return value === "at_studied_dose" || value === "below_studied_dose" || value === "above_studied_dose"
-      ? value
-      : undefined;
+    return value === "at_studied_dose" || value === "below_studied_dose" || value === "above_studied_dose" ? value : undefined;
   }
-
   function mapRaw(raw: unknown): ParsedFormulation | null {
     if (!raw || typeof raw !== "object") return null;
     const source = raw as Record<string, unknown>;
@@ -144,29 +189,20 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
       expected_outcomes: typeof source.expected_outcomes === "string" ? source.expected_outcomes : "",
     };
   }
-
   function tryParse(candidate: string): ParsedFormulation | null {
     const direct = parseJsonObject(candidate);
     if (direct) { const m = mapRaw(direct); if (m) return m; }
     return null;
   }
 
-  // Strategy 1: ```json ... ``` fence
   const fenceJson = text.match(/```json\s*([\s\S]*?)(?:```|$)/);
   if (fenceJson) { const r = tryParse(fenceJson[1].trim()); if (r) return r; }
-
-  // Strategy 2: ``` ... ``` fence without language
   const fencePlain = text.match(/```\s*([\s\S]*?)(?:```|$)/);
   if (fencePlain) { const r = tryParse(fencePlain[1].trim()); if (r) return r; }
-
-  // Strategy 3: extract from first { to last } in the whole text
   const start = text.indexOf("{");
   if (start !== -1) {
-    // Try the whole remainder first (handles truncated JSON)
     const r = tryParse(text.slice(start));
     if (r) return r;
-
-    // Find matching close brace
     let depth = 0, end = -1, inStr = false, esc = false;
     for (let i = start; i < text.length; i++) {
       const c = text[i];
@@ -177,48 +213,48 @@ function parseFormulationJson(text: string): ParsedFormulation | null {
       if (c === "{") depth++;
       else if (c === "}") { depth--; if (depth === 0) { end = i; break; } }
     }
-    if (end !== -1) {
-      const r = tryParse(text.slice(start, end + 1));
-      if (r) return r;
-    }
+    if (end !== -1) { const r = tryParse(text.slice(start, end + 1)); if (r) return r; }
   }
-
   return null;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PhaseIndicator({ phase }: { phase: Phase }) {
+function BuilderProgress({ phase }: { phase: Phase }) {
   const current = stepIndex(phase);
   return (
-    <div className="flex items-center gap-2 mb-8">
+    <div className="mb-8 flex items-center">
       {PHASE_STEPS.map((step, i) => {
         const done = i < current;
         const active = i === current;
+        const isLast = i === PHASE_STEPS.length - 1;
         return (
-          <div key={step.key} className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
+          <div key={step.key} className="flex flex-1 items-center">
+            <div className="flex flex-col items-center gap-1.5">
               <div className={cn(
-                "flex size-6 items-center justify-center rounded-full text-[11px] font-semibold transition-all",
-                done ? "bg-brand text-white" :
-                active ? "bg-brand/10 text-brand ring-2 ring-brand/30" :
+                "flex size-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-500",
+                done ? "bg-emerald-500 text-white" :
+                active ? "bg-brand text-white ring-4 ring-brand/20" :
                 "bg-gray-100 text-gray-400"
               )}>
-                {done ? <Check className="size-3" /> : (
-                  active && (phase === "researching" || phase === "formulating" || phase === "compliance_running" || phase === "compliance_refining" || phase === "refining")
-                    ? <Loader2 className="size-3 animate-spin" />
+                {done ? <Check className="size-3.5" /> : (
+                  active && ["researching","formulating","compliance_running","compliance_refining","refining"].includes(phase)
+                    ? <Loader2 className="size-3.5 animate-spin" />
                     : i + 1
                 )}
               </div>
               <span className={cn(
-                "hidden text-[12px] font-medium sm:block",
-                done ? "text-brand" : active ? "text-gray-900" : "text-gray-400"
+                "hidden text-[11px] font-medium sm:block whitespace-nowrap",
+                done ? "text-emerald-600" : active ? "text-brand" : "text-gray-400"
               )}>
                 {step.label}
               </span>
             </div>
-            {i < PHASE_STEPS.length - 1 && (
-              <div className={cn("h-px w-8 transition-all", done ? "bg-brand" : "bg-gray-200")} />
+            {!isLast && (
+              <div className={cn(
+                "mx-1 h-px flex-1 transition-all duration-700",
+                done ? "bg-emerald-400" : "bg-gray-200"
+              )} />
             )}
           </div>
         );
@@ -227,50 +263,320 @@ function PhaseIndicator({ phase }: { phase: Phase }) {
   );
 }
 
-function FeedbackBox({
-  label, placeholder, onSubmit, loading, submitLabel = "Submit", onSkip, skipLabel,
-}: {
-  label: string; placeholder: string;
-  onSubmit: (text: string) => void;
-  loading?: boolean; submitLabel?: string;
-  onSkip?: () => void; skipLabel?: string;
-}) {
-  const [text, setText] = useState("");
+function ActivityFeed({ phase, streaming }: { phase: Phase; streaming: boolean }) {
+  const steps = ACTIVITY_STEPS[phase] ?? [];
+  const [count, setCount] = useState(1);
+
+  useEffect(() => {
+    setCount(1);
+    if (!steps.length) return;
+    const id = setInterval(() => setCount(c => Math.min(c + 1, steps.length)), 1600);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  const displayCount = streaming ? count : steps.length;
+
   return (
-    <div className="mt-4 space-y-3 rounded-xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-      <p className="text-[12px] font-semibold text-gray-700">{label}</p>
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <MessageSquare className="absolute left-3 top-2.5 size-3.5 text-gray-400" />
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder={placeholder}
-            rows={2}
-            className="w-full resize-none rounded-lg border border-black/[0.08] bg-white py-2 pl-9 pr-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
-          />
+    <div className="space-y-2.5">
+      {steps.slice(0, displayCount).map((step, i) => {
+        const isDone = !streaming || i < displayCount - 1;
+        return (
+          <motion.div
+            key={`${phase}-${i}`}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25 }}
+            className="flex items-center gap-3"
+          >
+            <div className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+              isDone ? "bg-emerald-500" : "bg-brand"
+            )}>
+              {isDone
+                ? <Check className="size-3 text-white" />
+                : <span className="size-1.5 animate-pulse rounded-full bg-white" />
+              }
+            </div>
+            <span className={cn(
+              "font-mono text-[12px] transition-colors",
+              isDone ? "text-gray-400" : "font-medium text-gray-900"
+            )}>
+              {step}{!isDone && <span className="animate-pulse">…</span>}
+            </span>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TerminalCard({
+  agentLabel,
+  phase,
+  streaming,
+  streamContent,
+  statusLabel,
+  statusColor,
+}: {
+  agentLabel: string;
+  phase: Phase;
+  streaming: boolean;
+  streamContent?: string;
+  statusLabel: string;
+  statusColor: "brand" | "amber" | "emerald";
+}) {
+  const colorMap = {
+    brand: "text-brand",
+    amber: "text-amber-400",
+    emerald: "text-emerald-400",
+  };
+  const dotMap = {
+    brand: "bg-brand",
+    amber: "bg-amber-400",
+    emerald: "bg-emerald-400",
+  };
+  return (
+    <div className="rounded-2xl border border-gray-950/[0.08] bg-gray-950 px-6 py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex gap-1.5">
+            <span className="size-2.5 rounded-full bg-red-400/60" />
+            <span className="size-2.5 rounded-full bg-amber-400/60" />
+            <span className="size-2.5 rounded-full bg-emerald-400/60" />
+          </div>
+          <span className="font-mono text-[11px] text-white/40">{agentLabel}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={cn(
+            "size-1.5 rounded-full",
+            streaming ? "animate-pulse" : "",
+            dotMap[statusColor]
+          )} />
+          <span className={cn("text-[11px] font-medium", colorMap[statusColor])}>{statusLabel}</span>
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2">
-        {onSkip && (
+      <ActivityFeed phase={phase} streaming={streaming} />
+      {streamContent && (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <p className="mb-2 font-mono text-[10px] text-white/30">output stream</p>
+          <div className="max-h-40 overflow-y-auto">
+            <StreamingMarkdown content={streamContent} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IngredientCard({ ing, index }: { ing: ParsedIngredient; index: number }) {
+  const doseNum = parseFloat(ing.dose);
+  let dosePosition: number | null = null;
+
+  if (ing.clinical_dose_range && !isNaN(doseNum)) {
+    const m = ing.clinical_dose_range.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+    if (m) {
+      const min = parseFloat(m[1]);
+      const max = parseFloat(m[2]);
+      if (max > min) dosePosition = Math.max(0, Math.min(1, (doseNum - min) / (max - min)));
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.3 }}
+      className="flex flex-col rounded-xl border border-black/[0.06] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <p className="flex-1 text-[13px] font-semibold leading-snug text-gray-950">{ing.name}</p>
+        {ing.evidence_grade && (
+          <span className={cn(
+            "shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+            ing.evidence_grade === "A"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : ing.evidence_grade === "B"
+              ? "border-amber-200 bg-amber-50 text-amber-700"
+              : "border-gray-200 bg-gray-100 text-gray-500"
+          )}>
+            Grade {ing.evidence_grade}
+          </span>
+        )}
+      </div>
+
+      <div className="mb-1 flex items-baseline gap-1.5">
+        <span className="font-mono text-[28px] font-bold leading-none tracking-tight text-gray-950">
+          {ing.dose || "—"}
+        </span>
+        <span className="font-mono text-[13px] text-gray-400">{ing.unit}</span>
+      </div>
+
+      {dosePosition !== null && ing.clinical_dose_range ? (
+        <div className="mb-3">
+          <div className="relative h-1.5 rounded-full bg-gray-100">
+            <div className="absolute inset-0 rounded-full bg-brand/15" />
+            <div
+              className="absolute -top-[3px] size-3 -translate-x-1/2 rounded-full border-2 border-brand bg-white shadow-sm"
+              style={{ left: `${dosePosition * 100}%` }}
+            />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">Clinical: {ing.clinical_dose_range}</span>
+            {ing.dose_assessment && ing.dose_assessment !== "at_studied_dose" && (
+              <span className={cn(
+                "text-[10px] font-semibold",
+                ing.dose_assessment === "below_studied_dose" ? "text-orange-500" : "text-blue-500"
+              )}>
+                {ing.dose_assessment === "below_studied_dose" ? "↓ Below studied" : "↑ Above studied"}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : <div className="mb-3" />}
+
+      {ing.rationale && (
+        <p className="border-t border-black/[0.05] pt-3 text-[12px] leading-relaxed text-gray-500">
+          {ing.rationale}
+        </p>
+      )}
+    </motion.div>
+  );
+}
+
+function StackStats({ formulation, productType }: { formulation: ParsedFormulation; productType?: ProductType }) {
+  const grades = formulation.ingredients.reduce(
+    (acc, ing) => { if (ing.evidence_grade) acc[ing.evidence_grade] = (acc[ing.evidence_grade] ?? 0) + 1; return acc; },
+    {} as Record<string, number>
+  );
+  const gradeStr = [grades.A && `${grades.A}A`, grades.B && `${grades.B}B`, grades.C && `${grades.C}C`].filter(Boolean).join(" / ") || "—";
+  const stats = [
+    { label: "Ingredients", value: `${formulation.ingredients.length} actives` },
+    { label: "Total fill", value: formulation.total_fill_weight_mg > 0 ? `${formulation.total_fill_weight_mg} mg` : "—" },
+    { label: "Format", value: productType ? PRODUCT_TYPE_LABELS[productType] : "—" },
+    { label: "Evidence", value: gradeStr },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {stats.map(({ label, value }) => (
+        <div key={label} className="rounded-xl border border-black/[0.06] bg-white px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+          <p className="mt-1 text-[13px] font-semibold text-gray-950">{value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChatFeedback({
+  messages, onSubmit, loading, submitLabel = "Send", onSkip, skipLabel, placeholder,
+}: {
+  messages: ChatMessage[];
+  onSubmit: (text: string) => void;
+  loading?: boolean;
+  submitLabel?: string;
+  onSkip?: () => void;
+  skipLabel?: string;
+  placeholder: string;
+}) {
+  const [text, setText] = useState("");
+  const handleSubmit = () => { onSubmit(text); setText(""); };
+
+  return (
+    <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] overflow-hidden">
+      {messages.length > 0 && (
+        <div className="max-h-48 space-y-3 overflow-y-auto border-b border-black/[0.05] p-4">
+          {messages.map((msg, i) => (
+            <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+              <div className={cn(
+                "max-w-[85%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed",
+                msg.role === "user"
+                  ? "rounded-br-sm bg-gray-950 text-white"
+                  : "rounded-bl-sm bg-gray-100 text-gray-700"
+              )}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="p-4">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+          {messages.length === 0 ? "Request changes or approve" : "Continue conversation"}
+        </p>
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit(); }}
+          placeholder={placeholder}
+          rows={2}
+          disabled={loading}
+          className="w-full resize-none rounded-xl border border-black/[0.08] bg-gray-50/60 px-4 py-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10 disabled:opacity-60"
+        />
+        <div className="mt-3 flex items-center justify-between">
+          {onSkip ? (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="text-[12px] font-medium text-gray-400 transition hover:text-gray-700"
+            >
+              {skipLabel ?? "Skip →"}
+            </button>
+          ) : <span />}
           <button
             type="button"
-            onClick={onSkip}
-            className="rounded-lg px-4 py-2 text-[13px] font-medium text-gray-500 transition hover:text-gray-800"
+            disabled={loading}
+            onClick={handleSubmit}
+            className="flex items-center gap-1.5 rounded-xl bg-gray-950 px-5 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40"
           >
-            {skipLabel ?? "Skip"}
+            {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+            {loading ? "Working…" : submitLabel}
           </button>
-        )}
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => { onSubmit(text); setText(""); }}
-          className="flex items-center gap-1.5 rounded-lg bg-gray-950 px-5 py-2 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40"
-        >
-          {loading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
-          {loading ? "Working…" : submitLabel}
-        </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ComplianceRing({ score }: { score: number }) {
+  const r = 52;
+  const circumference = 2 * Math.PI * r;
+  const dash = (score / 100) * circumference;
+  const color = score >= 80 ? "#10b981" : score >= 60 ? "#f59e0b" : "#ef4444";
+  const label = score >= 80 ? "Compliant" : score >= 60 ? "Review advised" : "Issues found";
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative">
+        <svg width="136" height="136" viewBox="0 0 136 136">
+          <circle cx="68" cy="68" r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
+          <motion.circle
+            cx="68" cy="68" r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - dash }}
+            transition={{ duration: 1.6, ease: "easeOut", delay: 0.4 }}
+            style={{ transformOrigin: "68px 68px", transform: "rotate(-90deg)" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.9, duration: 0.4 }}
+            className="font-mono text-[34px] font-bold leading-none"
+            style={{ color }}
+          >
+            {score}
+          </motion.span>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">/100</span>
+        </div>
+      </div>
+      <span className="text-[12px] font-semibold" style={{ color }}>{label}</span>
     </div>
   );
 }
@@ -287,9 +593,14 @@ export default function NewFormulationPage() {
   const [parsedFormulation, setParsedFormulation] = useState<ParsedFormulation | null>(null);
   const [formulationId, setFormulationId] = useState<string | null>(null);
   const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
+  const [feedbackHistory, setFeedbackHistory] = useState<ChatMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Status helper ──
+  const step2Revealed = Boolean(intake.product_type);
+  const step3Revealed = step2Revealed && Boolean(intake.health_goal?.trim());
+  const intakeComplete = intake.product_type && intake.health_goal?.trim();
+
+  // ── Helpers ──
   async function updateStatus(id: string, status: string) {
     await fetch(`/api/formulations/${id}`, {
       method: "PUT",
@@ -298,7 +609,6 @@ export default function NewFormulationPage() {
     });
   }
 
-  // ── Create formulation in DB ──
   async function createFormulation(data: ParsedFormulation, productType: string): Promise<string | null> {
     try {
       const res = await fetch("/api/formulations", {
@@ -322,7 +632,6 @@ export default function NewFormulationPage() {
     }
   }
 
-  // ── Update formulation ingredients ──
   async function updateFormulation(id: string, data: ParsedFormulation, status: string) {
     await fetch(`/api/formulations/${id}`, {
       method: "PUT",
@@ -338,11 +647,11 @@ export default function NewFormulationPage() {
     });
   }
 
-  // ── Stream from builder API ──
+  // ── Streaming ──
   async function stream(
     phaseKey: "research" | "formulate" | "refine" | "compliance_refine",
     feedback?: string,
-    complianceResult?: string,
+    complianceRes?: string,
   ): Promise<string> {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
@@ -366,7 +675,7 @@ export default function NewFormulationPage() {
             research: researchContent,
             formulation_json: formulationContent,
             feedback,
-            compliance_result: complianceResult,
+            compliance_result: complianceRes,
           },
         }),
         signal: abortRef.current.signal,
@@ -395,7 +704,7 @@ export default function NewFormulationPage() {
     return accumulated;
   }
 
-  // ── Phase: Start Research ──
+  // ── Phase transitions ──
   async function startResearch() {
     if (!intake.product_type || !intake.health_goal?.trim()) return;
     setPhase("researching");
@@ -404,64 +713,45 @@ export default function NewFormulationPage() {
     setPhase("research_review");
   }
 
-  // ── Phase: Start Formulation ──
   async function startFormulation() {
+    setFeedbackHistory([]);
     setPhase("formulating");
     const content = await stream("formulate");
     setFormulationContent(content);
     const parsed = parseFormulationJson(content);
     setParsedFormulation(parsed);
-
-    if (!parsed) {
-      toast.error("Could not parse formulation structure. You can review the AI output and regenerate.");
-    }
-
-    // Create in DB
+    if (!parsed) toast.error("Could not parse formulation structure. You can review and regenerate.");
     if (parsed && intake.product_type) {
       const id = await createFormulation(parsed, intake.product_type);
-      if (id) {
-        setFormulationId(id);
-        await updateStatus(id, "in_progress");
-      }
+      if (id) { setFormulationId(id); await updateStatus(id, "in_progress"); }
     }
-
     setPhase("formulation_review");
   }
 
-  // ── Phase: Refine ──
   async function startRefine(feedback: string) {
+    if (feedback.trim()) setFeedbackHistory(h => [...h, { role: "user", text: feedback }]);
     setPhase("refining");
     const content = await stream("refine", feedback || "Refine the formulation for better efficacy and clinical backing.");
     setFormulationContent(content);
     const parsed = parseFormulationJson(content);
     setParsedFormulation(parsed);
-
-    // Update in DB
-    if (parsed && formulationId) {
-      await updateFormulation(formulationId, parsed, "in_progress");
-    }
+    if (parsed && formulationId) await updateFormulation(formulationId, parsed, "in_progress");
+    setFeedbackHistory(h => [...h, { role: "ai", text: "Formulation updated based on your feedback." }]);
     setPhase("formulation_review");
   }
 
-  // ── Phase: Approve → Compliance ──
   async function approveFormulation() {
     if (formulationId) await updateStatus(formulationId, "in_review");
     setPhase("compliance_running");
     await runCompliance();
   }
 
-  // ── Phase: Compliance ──
   async function runCompliance() {
     if (!formulationId) {
       if (parsedFormulation && intake.product_type) {
         const id = await createFormulation(parsedFormulation, intake.product_type);
-        if (id) {
-          setFormulationId(id);
-          await runComplianceForId(id);
-          return;
-        }
+        if (id) { setFormulationId(id); await runComplianceForId(id); return; }
       }
-      // No parsedFormulation or DB create failed — can't run compliance
       toast.error("Could not save formulation. Please review and try again.");
       setPhase("formulation_review");
       return;
@@ -479,27 +769,19 @@ export default function NewFormulationPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Compliance failed");
 
-      // Auto-fix loop: if score < 75 and we haven't already tried twice, refine
       if (typeof data.score === "number" && data.score < 75 && attempt < 2) {
         setComplianceResult(data);
         setPhase("compliance_refining");
-
         const complianceSummary = JSON.stringify({
-          score: data.score,
-          issues: data.issues,
+          score: data.score, issues: data.issues,
           recommendations: data.recommendations,
           risky_claims: data.risky_claims,
           auto_fix_guidance: data.auto_fix_guidance,
         });
-
         const refined = await stream("compliance_refine", undefined, complianceSummary);
         setFormulationContent(refined);
         const parsed = parseFormulationJson(refined);
-        if (parsed) {
-          setParsedFormulation(parsed);
-          await updateFormulation(id, parsed, "in_review");
-        }
-
+        if (parsed) { setParsedFormulation(parsed); await updateFormulation(id, parsed, "in_review"); }
         setPhase("compliance_running");
         await runComplianceForId(id, attempt + 1);
         return;
@@ -514,11 +796,9 @@ export default function NewFormulationPage() {
     }
   }
 
-  // ── Rendered intake data ──
-  const intakeComplete = intake.product_type && intake.health_goal?.trim();
-
+  // ── Render ──
   return (
-    <div className="space-y-6 pb-12">
+    <div className="mx-auto max-w-3xl space-y-6 pb-16">
       {/* Header */}
       <div>
         <Link
@@ -528,204 +808,263 @@ export default function NewFormulationPage() {
           <ChevronLeft className="size-3.5" />
           Formulations
         </Link>
-        <h1 className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-gray-950">
-          AI Formulation Builder
-        </h1>
-        <p className="mt-1 text-[13px] text-gray-500">
-          Answer a few questions — the AI researches, formulates, and validates your product autonomously.
-        </p>
+        <div className="mt-3">
+          <h1 className="text-[22px] font-semibold tracking-[-0.025em] text-gray-950">
+            AI Formulation Builder
+          </h1>
+          <p className="mt-0.5 text-[13px] text-gray-500">
+            Answer a few questions — AI researches, formulates, and validates your product end-to-end.
+          </p>
+        </div>
       </div>
 
-      {/* Phase indicator */}
-      <PhaseIndicator phase={phase} />
+      <BuilderProgress phase={phase} />
 
       <AnimatePresence mode="wait">
 
-        {/* ── INTAKE ──────────────────────────────────────────────────────── */}
+        {/* ── INTAKE ────────────────────────────────────────────────────────── */}
         {phase === "intake" && (
           <motion.div
             key="intake"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             className="space-y-4"
           >
-            {/* Product type */}
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="border-b border-black/[0.05] px-5 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Step 1</p>
-                <h2 className="mt-0.5 text-[14px] font-semibold text-gray-900">What delivery format are you building?</h2>
+            {/* Step 1: Product format */}
+            <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "flex size-7 items-center justify-center rounded-full text-[12px] font-bold text-white",
+                    intake.product_type ? "bg-emerald-500" : "bg-brand"
+                  )}>
+                    {intake.product_type ? <Check className="size-3.5" /> : "1"}
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-gray-950">What format are you building?</h2>
+                    <p className="text-[12px] text-gray-500">Choose the delivery form for your supplement</p>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 p-5 sm:grid-cols-4">
                 {PRODUCT_TYPES.map(type => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setIntake(d => ({ ...d, product_type: type }))}
                     className={cn(
-                      "group flex flex-col gap-2 rounded-xl border p-4 text-left transition",
+                      "group flex flex-col gap-2.5 rounded-xl border p-4 text-left transition-all duration-200",
                       intake.product_type === type
-                        ? "border-brand bg-brand/[0.04]"
-                        : "border-black/[0.07] bg-gray-50/50 hover:border-black/20 hover:bg-white"
+                        ? "border-brand bg-brand/[0.05] shadow-[0_0_0_2px_rgba(91,110,225,0.15)]"
+                        : "border-black/[0.07] hover:border-brand/30 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
                     )}
                   >
-                    <p className={cn(
-                      "text-[13px] font-semibold",
-                      intake.product_type === type ? "text-brand" : "text-gray-900"
+                    <div className={cn(
+                      "flex size-8 items-center justify-center rounded-lg text-[13px] font-bold transition-colors",
+                      intake.product_type === type
+                        ? "bg-brand text-white"
+                        : "bg-gray-100 text-gray-500 group-hover:bg-brand/10 group-hover:text-brand"
                     )}>
-                      {PRODUCT_TYPE_LABELS[type]}
-                    </p>
-                    <p className="text-[11px] leading-snug text-gray-400">{PRODUCT_TYPE_DESC[type]}</p>
+                      {PRODUCT_TYPE_LABELS[type][0]}
+                    </div>
+                    <div>
+                      <p className={cn(
+                        "text-[13px] font-semibold leading-snug",
+                        intake.product_type === type ? "text-brand" : "text-gray-900"
+                      )}>
+                        {PRODUCT_TYPE_LABELS[type]}
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-gray-400">{PRODUCT_TYPE_DESC[type]}</p>
+                    </div>
+                    {intake.product_type === type && (
+                      <Check className="ml-auto mt-auto size-4 text-brand" />
+                    )}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Health goal */}
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="border-b border-black/[0.05] px-5 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Step 2</p>
-                <h2 className="mt-0.5 text-[14px] font-semibold text-gray-900">What health goal does this product address?</h2>
-              </div>
-              <div className="space-y-3 p-5">
-                <textarea
-                  value={intake.health_goal ?? ""}
-                  onChange={e => setIntake(d => ({ ...d, health_goal: e.target.value }))}
-                  rows={3}
-                  placeholder="e.g. Improve cognitive focus and mental clarity for knowledge workers throughout the workday…"
-                  className="w-full resize-none rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    "Cognitive focus & mental clarity",
-                    "Sleep quality & recovery",
-                    "Athletic endurance & performance",
-                    "Stress & cortisol management",
-                    "Gut health & microbiome",
-                    "Immune system resilience",
-                    "Joint & mobility support",
-                    "Longevity & cellular health",
-                  ].map(ex => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => setIntake(d => ({ ...d, health_goal: ex }))}
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-[11px] transition",
-                        intake.health_goal === ex
-                          ? "border-brand/30 bg-brand/[0.06] text-brand"
-                          : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-brand/20 hover:text-gray-700"
-                      )}
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Consumer + requirements */}
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="border-b border-black/[0.05] px-5 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Step 3 — Optional</p>
-                <h2 className="mt-0.5 text-[14px] font-semibold text-gray-900">Target consumer & special requirements</h2>
-              </div>
-              <div className="space-y-4 p-5">
-                <div>
-                  <p className="mb-2 text-[12px] font-medium text-gray-600">Target consumer</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CONSUMER_OPTIONS.map(opt => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setIntake(d => ({ ...d, consumer: d.consumer === opt ? "" : opt }))}
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-[11px] font-medium transition",
-                          intake.consumer === opt
-                            ? "border-brand/30 bg-brand/[0.06] text-brand"
-                            : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-black/20 hover:text-gray-700"
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
+            {/* Step 2: Health goal */}
+            <AnimatePresence>
+              {step2Revealed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "flex size-7 items-center justify-center rounded-full text-[12px] font-bold text-white",
+                        intake.health_goal?.trim() ? "bg-emerald-500" : "bg-brand"
+                      )}>
+                        {intake.health_goal?.trim() ? <Check className="size-3.5" /> : "2"}
+                      </div>
+                      <div>
+                        <h2 className="text-[15px] font-semibold text-gray-950">
+                          What health outcome should it deliver?
+                        </h2>
+                        <p className="text-[12px] text-gray-500">Be specific — this drives ingredient selection and dosing</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <p className="mb-2 text-[12px] font-medium text-gray-600">Special requirements</p>
-                  <input
-                    type="text"
-                    value={intake.requirements ?? ""}
-                    onChange={e => setIntake(d => ({ ...d, requirements: e.target.value }))}
-                    placeholder="e.g. Vegan, no caffeine, NSF certified, under $2/serving…"
-                    className="h-9 w-full rounded-lg border border-black/[0.08] bg-white px-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:ring-2 focus:ring-brand/15"
-                  />
-                </div>
-              </div>
-            </div>
+                  <div className="space-y-4 p-5">
+                    <textarea
+                      value={intake.health_goal ?? ""}
+                      onChange={e => setIntake(d => ({ ...d, health_goal: e.target.value }))}
+                      rows={3}
+                      placeholder="e.g. Improve cognitive focus and mental clarity for knowledge workers throughout the workday…"
+                      className="w-full resize-none rounded-xl border border-black/[0.08] bg-gray-50/50 px-4 py-3 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        "Cognitive focus & mental clarity",
+                        "Sleep quality & recovery",
+                        "Athletic endurance & performance",
+                        "Stress & cortisol management",
+                        "Gut health & microbiome",
+                        "Immune system resilience",
+                        "Joint & mobility support",
+                        "Longevity & cellular health",
+                      ].map(ex => (
+                        <button
+                          key={ex}
+                          type="button"
+                          onClick={() => setIntake(d => ({ ...d, health_goal: ex }))}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                            intake.health_goal === ex
+                              ? "border-brand/30 bg-brand/[0.06] text-brand"
+                              : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-brand/20 hover:text-gray-800"
+                          )}
+                        >
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            {/* Start */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={startResearch}
-                disabled={!intakeComplete}
-                className="flex items-center gap-2 rounded-lg bg-gray-950 px-6 py-2.5 text-[13px] font-medium text-white transition hover:bg-gray-800 disabled:opacity-40"
-              >
-                <Sparkles className="size-3.5" />
-                Start AI research
-                <ArrowRight className="size-3.5" />
-              </button>
-            </div>
+            {/* Step 3: Consumer & requirements */}
+            <AnimatePresence>
+              {step3Revealed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="border-b border-black/[0.05] bg-gray-50/60 px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-7 items-center justify-center rounded-full bg-gray-200 text-[12px] font-bold text-gray-500">
+                        3
+                      </div>
+                      <div>
+                        <h2 className="text-[15px] font-semibold text-gray-950">
+                          Target consumer &amp; requirements
+                          <span className="ml-2 text-[11px] font-normal text-gray-400">(optional)</span>
+                        </h2>
+                        <p className="text-[12px] text-gray-500">Tailor the formula to a specific audience and constraints</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-5 p-5">
+                    <div>
+                      <p className="mb-2.5 text-[12px] font-semibold text-gray-600">Target consumer</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CONSUMER_OPTIONS.map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setIntake(d => ({ ...d, consumer: d.consumer === opt ? "" : opt }))}
+                            className={cn(
+                              "rounded-full border px-3 py-1 text-[11px] font-medium transition",
+                              intake.consumer === opt
+                                ? "border-brand/30 bg-brand/[0.06] text-brand"
+                                : "border-black/[0.06] bg-gray-50 text-gray-500 hover:border-black/20 hover:text-gray-700"
+                            )}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-[12px] font-semibold text-gray-600">Special requirements</p>
+                      <input
+                        type="text"
+                        value={intake.requirements ?? ""}
+                        onChange={e => setIntake(d => ({ ...d, requirements: e.target.value }))}
+                        placeholder="e.g. Vegan, no caffeine, NSF certified, under $2/serving…"
+                        className="h-10 w-full rounded-xl border border-black/[0.08] bg-gray-50/60 px-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Start CTA */}
+            <AnimatePresence>
+              {intakeComplete && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-end pt-2"
+                >
+                  <button
+                    type="button"
+                    onClick={startResearch}
+                    className="group flex items-center gap-2.5 rounded-2xl bg-gray-950 px-7 py-3.5 text-[14px] font-semibold text-white shadow-lg shadow-black/10 transition hover:bg-gray-800"
+                  >
+                    <Sparkles className="size-4 text-brand" />
+                    Start AI research
+                    <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
-        {/* ── RESEARCHING ─────────────────────────────────────────────────── */}
+        {/* ── RESEARCHING / RESEARCH REVIEW ──────────────────────────────── */}
         {(phase === "researching" || phase === "research_review") && (
           <motion.div
             key="research"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             className="space-y-4"
           >
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center justify-between border-b border-black/[0.05] px-5 py-3.5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Phase 1 — Research</p>
-                  <h2 className="mt-0.5 text-[14px] font-semibold text-gray-900">
-                    Scanning clinical evidence for{" "}
-                    <span className="text-brand">{PRODUCT_TYPE_LABELS[intake.product_type!]}</span>
-                  </h2>
+            <TerminalCard
+              agentLabel={`ai-research-agent — ${PRODUCT_TYPE_LABELS[intake.product_type!] ?? "supplement"}`}
+              phase="researching"
+              streaming={streaming}
+              statusLabel={streaming ? "Running" : "Complete"}
+              statusColor={streaming ? "brand" : "emerald"}
+            />
+
+            {(streamContent || researchContent) && (
+              <div className="rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+                <div className="border-b border-black/[0.05] px-6 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Research output</p>
+                  <h3 className="mt-0.5 text-[14px] font-semibold text-gray-950">
+                    Clinical evidence for{" "}
+                    <span className="text-brand">{(intake.health_goal ?? "").slice(0, 60)}</span>
+                  </h3>
                 </div>
-                {streaming && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-brand">
-                    <span className="size-1.5 animate-pulse rounded-full bg-brand" />
-                    Analyzing
-                  </div>
-                )}
-                {!streaming && phase === "research_review" && (
-                  <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                    <Check className="size-3" />
-                    Done
-                  </span>
-                )}
+                <div className="px-6 py-5">
+                  <StreamingMarkdown content={phase === "research_review" ? researchContent : streamContent} />
+                </div>
               </div>
-              <div className="px-5 py-5">
-                {streaming && !streamContent && (
-                  <div className="flex items-center gap-2 text-[12px] text-gray-400">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Retrieving clinical evidence…
-                  </div>
-                )}
-                <StreamingMarkdown content={phase === "research_review" ? researchContent : streamContent} />
-              </div>
-            </div>
+            )}
 
             {phase === "research_review" && (
-              <FeedbackBox
-                label="Research complete. Ready to formulate — or request additional research?"
-                placeholder="e.g. Include more research on nootropics, or dig deeper into magnesium forms…"
+              <ChatFeedback
+                messages={[]}
+                placeholder="Request additional research on specific ingredients, mechanisms, or populations…"
                 onSubmit={feedback => {
                   if (feedback.trim()) {
                     setPhase("researching");
@@ -738,7 +1077,7 @@ export default function NewFormulationPage() {
                   }
                 }}
                 loading={streaming}
-                submitLabel={streaming ? "Working…" : "Proceed to formulation"}
+                submitLabel={streaming ? "Working…" : "Proceed to formulation →"}
                 onSkip={startFormulation}
                 skipLabel="Skip — formulate now"
               />
@@ -750,164 +1089,83 @@ export default function NewFormulationPage() {
         {(phase === "formulating" || phase === "formulation_review" || phase === "refining") && (
           <motion.div
             key="formulation"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             className="space-y-4"
           >
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center justify-between border-b border-black/[0.05] px-5 py-3.5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-                    Phase 2 — {phase === "refining" ? "Refining" : "Formulation"}
-                  </p>
-                  <h2 className="mt-0.5 text-[14px] font-semibold text-gray-900">
-                    {phase === "refining" ? "Applying your feedback…" :
-                     phase === "formulating" ? "Drafting your formulation…" :
-                     "Formulation draft ready"}
-                  </h2>
-                </div>
-                {(streaming) && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-brand">
-                    <span className="size-1.5 animate-pulse rounded-full bg-brand" />
-                    {phase === "refining" ? "Refining" : "Formulating"}
-                  </div>
-                )}
-                {!streaming && phase === "formulation_review" && parsedFormulation && (
-                  <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                    <Check className="size-3" />
-                    Ready
-                  </span>
-                )}
-              </div>
+            {(phase === "formulating" || phase === "refining") && (
+              <TerminalCard
+                agentLabel={phase === "refining" ? "ai-refine-agent" : "ai-formulation-agent"}
+                phase={phase}
+                streaming={streaming}
+                streamContent={streamContent}
+                statusLabel={phase === "refining" ? "Refining" : "Formulating"}
+                statusColor="brand"
+              />
+            )}
 
-              {/* Parsed formulation card */}
-              {!streaming && parsedFormulation && phase === "formulation_review" ? (
-                <div className="p-5 space-y-5">
-                  {/* Header */}
+            {phase === "formulation_review" && parsedFormulation && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                {/* Formula header */}
+                <div className="rounded-2xl border border-black/[0.06] bg-white px-6 py-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-[17px] font-semibold tracking-tight text-gray-950">{parsedFormulation.name}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-brand">
+                        Formulation draft ready
+                      </p>
+                      <h2 className="mt-1.5 text-[20px] font-semibold tracking-[-0.02em] text-gray-950">
+                        {parsedFormulation.name}
+                      </h2>
                       <p className="mt-1 text-[13px] text-gray-500">{parsedFormulation.description}</p>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-[11px] font-medium text-gray-400">Total fill</p>
-                      <p className="font-mono text-[16px] font-semibold text-gray-900">
-                        {parsedFormulation.total_fill_weight_mg > 0 ? `${parsedFormulation.total_fill_weight_mg} mg` : "—"}
-                      </p>
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                      <Check className="size-4 text-emerald-600" />
                     </div>
                   </div>
-
-                  {/* Ingredients table */}
-                  <div className="rounded-lg border border-black/[0.06] overflow-hidden">
-                    <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-black/[0.05] bg-gray-50/80 px-4 py-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ingredient</span>
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 text-right">Dose</span>
-                    </div>
-                    {parsedFormulation.ingredients.map((ing, i) => (
-                      <div key={i} className="border-b border-black/[0.04] px-4 py-3 last:border-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-[13px] font-medium text-gray-900">{ing.name}</p>
-                              {ing.evidence_grade && (
-                                <span className={cn(
-                                  "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                                  ing.evidence_grade === "A" ? "bg-emerald-50 text-emerald-700" :
-                                  ing.evidence_grade === "B" ? "bg-amber-50 text-amber-700" :
-                                  "bg-gray-100 text-gray-500"
-                                )}>
-                                  {ing.evidence_grade === "A" ? "Strong RCT" : ing.evidence_grade === "B" ? "Moderate" : "Emerging"}
-                                </span>
-                              )}
-                              {ing.dose_assessment && ing.dose_assessment !== "at_studied_dose" && (
-                                <span className={cn(
-                                  "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold",
-                                  ing.dose_assessment === "below_studied_dose" ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"
-                                )}>
-                                  {ing.dose_assessment === "below_studied_dose" ? "↓ Below clinical dose" : "↑ Above clinical dose"}
-                                </span>
-                              )}
-                            </div>
-                            {ing.clinical_dose_range && (
-                              <p className="mt-0.5 text-[10px] text-gray-400">Clinical range: {ing.clinical_dose_range}</p>
-                            )}
-                            {ing.rationale && (
-                              <p className="mt-1 text-[11px] leading-snug text-gray-500">{ing.rationale}</p>
-                            )}
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="font-mono text-[14px] font-semibold text-gray-800">{ing.dose}</p>
-                            <p className="font-mono text-[11px] text-gray-400">{ing.unit}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Specs */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {[
-                      ["Serving size", parsedFormulation.serving_size],
-                      ["Ingredients", `${parsedFormulation.ingredients.length} actives`],
-                      ["Format", PRODUCT_TYPE_LABELS[intake.product_type!] ?? intake.product_type],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-lg border border-black/[0.05] bg-gray-50/60 p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</p>
-                        <p className="mt-1 text-[13px] font-medium text-gray-900">{value || "—"}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Expected outcomes */}
                   {parsedFormulation.expected_outcomes && (
-                    <div className="rounded-lg border border-brand/10 bg-brand/[0.03] px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-brand mb-1">Expected outcomes</p>
-                      <p className="text-[12px] leading-relaxed text-gray-700">{parsedFormulation.expected_outcomes}</p>
+                    <div className="mt-4 rounded-xl border border-brand/10 bg-brand/[0.03] px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-brand">Expected outcomes</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-gray-700">{parsedFormulation.expected_outcomes}</p>
                     </div>
                   )}
-
-                  {/* Full AI response (collapsible) */}
-                  <details className="group">
-                    <summary className="cursor-pointer list-none text-[12px] font-medium text-gray-400 hover:text-gray-700 transition flex items-center gap-1">
-                      <ChevronRight className="size-3.5 transition group-open:rotate-90" />
-                      Show full AI rationale
-                    </summary>
-                    <div className="mt-3 border-t border-black/[0.05] pt-3">
-                      <StreamingMarkdown content={formulationContent.replace(/```json[\s\S]*?```/g, "")} />
-                    </div>
-                  </details>
                 </div>
-              ) : (
-                <div className="px-5 py-5">
-                  {streaming && !streamContent && (
-                    <div className="flex items-center gap-2 text-[12px] text-gray-400">
-                      <Loader2 className="size-3.5 animate-spin" />
-                      Drafting formulation from research…
-                    </div>
-                  )}
-                  <StreamingMarkdown content={streamContent} />
-                </div>
-              )}
-            </div>
 
-            {phase === "formulation_review" && !streaming && (
-              <div className="space-y-3">
-                <FeedbackBox
-                  label="Request changes, or approve this formulation to run compliance."
-                  placeholder="e.g. Increase ashwagandha to 600mg, add lion's mane, remove caffeine…"
+                <StackStats formulation={parsedFormulation} productType={intake.product_type} />
+
+                <div>
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+                    Ingredient stack — {parsedFormulation.ingredients.length} actives
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {parsedFormulation.ingredients.map((ing, i) => (
+                      <IngredientCard key={i} ing={ing} index={i} />
+                    ))}
+                  </div>
+                </div>
+
+                <details className="group rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+                  <summary className="flex cursor-pointer items-center gap-2 px-5 py-3.5 text-[12px] font-medium text-gray-500 hover:text-gray-800">
+                    <ChevronRight className="size-3.5 transition group-open:rotate-90" />
+                    Show full AI rationale
+                  </summary>
+                  <div className="border-t border-black/[0.05] px-5 py-5">
+                    <StreamingMarkdown content={formulationContent.replace(/```json[\s\S]*?```/g, "")} />
+                  </div>
+                </details>
+
+                <ChatFeedback
+                  messages={feedbackHistory}
+                  placeholder="e.g. Increase ashwagandha to 600 mg, add lion's mane, remove caffeine…"
                   onSubmit={feedback => {
-                    if (feedback.trim()) {
-                      startRefine(feedback);
-                    } else {
-                      approveFormulation();
-                    }
+                    if (feedback.trim()) { startRefine(feedback); } else { approveFormulation(); }
                   }}
                   loading={streaming}
                   submitLabel="Approve & run compliance"
                   onSkip={approveFormulation}
-                  skipLabel="Approve — looks good"
+                  skipLabel="Looks good — approve"
                 />
+
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -915,10 +1173,10 @@ export default function NewFormulationPage() {
                     className="flex items-center gap-1.5 text-[12px] text-gray-400 transition hover:text-gray-700"
                   >
                     <RefreshCw className="size-3" />
-                    Regenerate formulation
+                    Regenerate from scratch
                   </button>
                 </div>
-              </div>
+              </motion.div>
             )}
           </motion.div>
         )}
@@ -927,17 +1185,25 @@ export default function NewFormulationPage() {
         {phase === "compliance_running" && (
           <motion.div
             key="compliance"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
+            className="space-y-4"
           >
-            <div className="flex min-h-[30vh] flex-col items-center justify-center gap-5 rounded-xl border border-black/[0.06] bg-white p-10 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="flex size-14 items-center justify-center rounded-2xl border border-brand/20 bg-brand/[0.04]">
-                <ShieldCheck className="size-7 text-brand" />
+            <TerminalCard
+              agentLabel="ai-compliance-agent — FDA DSHEA"
+              phase="compliance_running"
+              streaming={true}
+              statusLabel="Analyzing"
+              statusColor="amber"
+            />
+            <div className="flex items-center justify-center gap-4 rounded-2xl border border-black/[0.06] bg-white px-6 py-8 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <div className="flex size-12 items-center justify-center rounded-2xl border border-brand/20 bg-brand/[0.06]">
+                <ShieldCheck className="size-6 text-brand" />
               </div>
-              <div className="text-center">
-                <p className="text-[14px] font-semibold text-gray-900">Running compliance analysis</p>
-                <p className="mt-1.5 flex items-center gap-2 text-[13px] text-gray-400">
+              <div>
+                <p className="text-[14px] font-semibold text-gray-950">Running compliance analysis</p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-400">
                   <Loader2 className="size-3.5 animate-spin" />
                   Reviewing against FDA DSHEA guidelines…
                 </p>
@@ -950,50 +1216,45 @@ export default function NewFormulationPage() {
         {phase === "compliance_refining" && (
           <motion.div
             key="compliance_refining"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
             className="space-y-4"
           >
-            <div className="rounded-xl border border-amber-100 bg-amber-50 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4">
               <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-100">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-100">
                   <ShieldCheck className="size-4.5 text-amber-600" />
                 </div>
                 <div>
                   <p className="text-[13px] font-semibold text-amber-900">
-                    Compliance score below threshold — auto-fixing
+                    Score below threshold — auto-correcting
                   </p>
-                  <p className="mt-1 text-[12px] text-amber-700">
+                  <p className="mt-0.5 text-[12px] text-amber-700">
                     Score: <span className="font-bold">{complianceResult?.score ?? "—"}/100</span>
-                    {" "}— The AI identified compliance issues and is automatically revising the formulation to meet FDA guidelines.
+                    {" "}— AI is automatically revising the formulation to resolve compliance issues.
                   </p>
-                  {complianceResult?.issues?.filter(i => i.severity === "high").length ? (
+                  {Boolean(complianceResult?.issues?.filter(i => i.severity === "high").length) && (
                     <ul className="mt-2 space-y-1">
-                      {complianceResult.issues.filter(i => i.severity === "high").slice(0, 3).map((issue, idx) => (
+                      {complianceResult!.issues.filter(i => i.severity === "high").slice(0, 3).map((issue, idx) => (
                         <li key={idx} className="flex items-start gap-1.5 text-[11px] text-amber-700">
                           <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-amber-500" />
                           <span><span className="font-semibold">{issue.issue}</span>{issue.ingredient ? ` — ${issue.ingredient}` : ""}</span>
                         </li>
                       ))}
                     </ul>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center gap-2 border-b border-black/[0.05] px-5 py-3.5">
-                <Loader2 className="size-3.5 animate-spin text-brand" />
-                <p className="text-[13px] font-semibold text-gray-900">Rewriting formulation for compliance…</p>
-              </div>
-              <div className="px-5 py-5">
-                {streamContent ? (
-                  <StreamingMarkdown content={streamContent} />
-                ) : (
-                  <p className="text-[12px] text-gray-400">Applying regulatory corrections…</p>
-                )}
-              </div>
-            </div>
+            <TerminalCard
+              agentLabel="ai-compliance-refine-agent"
+              phase="compliance_refining"
+              streaming={streaming}
+              streamContent={streamContent}
+              statusLabel="Rewriting"
+              statusColor="brand"
+            />
           </motion.div>
         )}
 
@@ -1001,51 +1262,69 @@ export default function NewFormulationPage() {
         {phase === "complete" && (
           <motion.div
             key="complete"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-5"
           >
-            {/* Animation hero */}
-            <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)]">
-              <div className="flex flex-col items-center gap-6 px-8 py-12">
+            {/* Hero result card */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)]"
+            >
+              <div className="flex flex-col items-center gap-8 px-8 py-12 sm:flex-row sm:items-start">
+                <div className="shrink-0">
+                  {complianceResult
+                    ? <ComplianceRing score={complianceResult.score} />
+                    : (
+                      <div className="flex size-[136px] items-center justify-center rounded-full border-4 border-emerald-100">
+                        <Check className="size-10 text-emerald-500" />
+                      </div>
+                    )
+                  }
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-brand">
+                      AI formulation complete
+                    </p>
+                    <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.025em] text-gray-950">
+                      {parsedFormulation?.name ?? "Your formulation is ready"}
+                    </h2>
+                    <p className="mt-2 text-[13px] leading-relaxed text-gray-500">
+                      {parsedFormulation?.description}
+                    </p>
+                  </motion.div>
+                  <div className="mt-6">
+                    <ProductAnimation
+                      productType={intake.product_type!}
+                      complianceScore={complianceResult?.score}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {complianceResult && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="text-center"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8 }}
+                  className="space-y-4 border-t border-black/[0.05] px-8 py-6"
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-brand">Complete</p>
-                  <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-gray-950">
-                    {parsedFormulation?.name ?? "Your formulation is ready"}
-                  </h2>
-                  <p className="mt-2 text-[13px] text-gray-500 max-w-sm mx-auto">
-                    {parsedFormulation?.description}
-                  </p>
-                </motion.div>
-
-                <ProductAnimation
-                  productType={intake.product_type!}
-                  complianceScore={complianceResult?.score}
-                />
-
-                {/* Compliance summary */}
-                {complianceResult && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.5 }}
-                    className="w-full max-w-lg space-y-3"
-                  >
-                    <p className="text-center text-[12px] font-semibold text-gray-500">{complianceResult.summary}</p>
-                    {complianceResult.review_disclaimer && (
-                      <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-center text-[11px] leading-relaxed text-amber-700">
-                        {complianceResult.review_disclaimer}
-                      </p>
-                    )}
-
+                  {complianceResult.summary && (
+                    <p className="text-[13px] text-gray-600">{complianceResult.summary}</p>
+                  )}
+                  {complianceResult.review_disclaimer && (
+                    <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                      <p className="text-[12px] leading-relaxed text-amber-700">{complianceResult.review_disclaimer}</p>
+                    </div>
+                  )}
+                  <div className="grid gap-4 sm:grid-cols-2">
                     {complianceResult.issues.length > 0 && (
                       <div className="space-y-2">
-                        {complianceResult.issues.slice(0, 3).map((issue, i) => (
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Flagged items</p>
+                        {complianceResult.issues.slice(0, 4).map((issue, i) => (
                           <div key={i} className={cn(
                             "rounded-lg border px-3 py-2 text-[12px]",
                             issue.severity === "high" ? "border-red-100 bg-red-50 text-red-700" :
@@ -1058,35 +1337,30 @@ export default function NewFormulationPage() {
                         ))}
                       </div>
                     )}
-
                     {complianceResult.compliant_claims.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">Defensible claims</p>
-                        {complianceResult.compliant_claims.slice(0, 3).map((claim, i) => (
-                          <div key={i} className="flex items-start gap-2 text-[12px] text-gray-700">
-                            <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
-                            {claim}
+                        {complianceResult.compliant_claims.slice(0, 4).map((claim, i) => (
+                          <div key={i} className="flex items-start gap-2.5 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                            <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
+                            <span className="text-[12px] leading-relaxed text-emerald-800">{claim}</span>
                           </div>
                         ))}
                       </div>
                     )}
-                  </motion.div>
-                )}
-              </div>
-            </div>
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
 
             {/* Next steps */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 2 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-gray-400">Next steps</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
                   {
                     label: "View formulation",
-                    desc: "See full ingredient panel, specs, and edit details",
+                    desc: "Full ingredient panel, label preview, compliance details",
                     href: formulationId ? `/dashboard/formulations/${formulationId}` : "/dashboard/formulations",
                     primary: true,
                   },
@@ -1105,17 +1379,18 @@ export default function NewFormulationPage() {
                     key={label}
                     href={href}
                     className={cn(
-                      "group rounded-xl border p-5 transition",
+                      "group rounded-2xl border p-5 transition-all",
                       primary
-                        ? "border-brand/20 bg-brand/[0.04] hover:bg-brand/[0.08]"
-                        : "border-black/[0.06] bg-white hover:border-black/[0.12] shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                        ? "border-brand/25 bg-brand/[0.04] hover:border-brand/40 hover:bg-brand/[0.07]"
+                        : "border-black/[0.06] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-black/[0.12] hover:shadow-[0_4px_12px_rgba(0,0,0,0.07)]"
                     )}
                   >
-                    <p className={cn("text-[13px] font-semibold", primary ? "text-brand" : "text-gray-900")}>
+                    <p className={cn("text-[13px] font-semibold", primary ? "text-brand" : "text-gray-950")}>
                       {label}
                     </p>
                     <p className="mt-1 text-[12px] leading-relaxed text-gray-500">{desc}</p>
-                    <p className={cn("mt-3 flex items-center gap-1 text-[12px] font-medium",
+                    <p className={cn(
+                      "mt-4 flex items-center gap-1 text-[12px] font-medium transition",
                       primary ? "text-brand" : "text-gray-400 group-hover:text-gray-700"
                     )}>
                       Open <ArrowRight className="size-3 transition group-hover:translate-x-0.5" />
